@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, LoginPortal } from '../contexts/AuthContext';
 import Button from '../components/ui/Button';
-import { Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Building2, Stethoscope } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const LoginPage: React.FC = () => {
@@ -10,73 +10,125 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [portal, setPortal] = useState<LoginPortal>('admin');
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, currentAdmin, currentDoctor } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (currentDoctor) navigate('/doctor', { replace: true });
+    else if (currentAdmin) navigate('/', { replace: true });
+  }, [isAuthenticated, currentAdmin, currentDoctor, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const success = await login(email, password);
+    const success = await login(email, password, portal);
     setIsLoading(false);
 
     if (success) {
-      navigate('/');
+      navigate(portal === 'doctor' ? '/doctor' : '/');
     } else {
-      toast.error('Access denied. Invalid credentials or role.');
+      toast.error(
+        portal === 'doctor'
+          ? 'Sign-in failed. Check your email and password, or confirm your lawyer account is active.'
+          : 'Sign-in failed. Check your email and password, or use an administrator account.'
+      );
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-        <h2 className="text-2xl font-bold text-center mb-6">Law Chamber Admin </h2>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 px-4 py-10">
+      <div className="w-full max-w-lg space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900">LawHubb</h1>
+          <p className="mt-1 text-slate-600">Choose how you want to sign in</p>
+        </div>
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 py-3 border rounded-xl"
-                placeholder="admin@chamber.com"
-              />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setPortal('admin')}
+            className={`rounded-2xl border-2 p-4 text-left transition ${
+              portal === 'admin'
+                ? 'border-teal-600 bg-white shadow-md ring-2 ring-teal-200'
+                : 'border-slate-200 bg-white/80 hover:border-slate-300'
+            }`}
+          >
+            <Building2 className={`h-8 w-8 ${portal === 'admin' ? 'text-teal-600' : 'text-slate-400'}`} />
+            <p className="mt-2 font-semibold text-slate-900">Chamber admin</p>
+            <p className="mt-1 text-xs text-slate-600">
+              For staff who manage chambers, members, and settings in this dashboard.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPortal('doctor')}
+            className={`rounded-2xl border-2 p-4 text-left transition ${
+              portal === 'doctor'
+                ? 'border-teal-600 bg-white shadow-md ring-2 ring-teal-200'
+                : 'border-slate-200 bg-white/80 hover:border-slate-300'
+            }`}
+          >
+            <Stethoscope className={`h-8 w-8 ${portal === 'doctor' ? 'text-teal-600' : 'text-slate-400'}`} />
+            <p className="mt-2 font-semibold text-slate-900">Lawyer / doctor</p>
+            <p className="mt-1 text-xs text-slate-600">
+              For lawyers and doctors: use the same email and password as the LawHubb app. You can handle referrals,
+              your library, chats, and video calls here.
+            </p>
+          </button>
+        </div>
+
+        <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
+          <h2 className="text-lg font-semibold text-center mb-6 text-slate-800">
+            {portal === 'admin' ? 'Sign in as administrator' : 'Sign in as lawyer or doctor'}
+          </h2>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-700">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  placeholder={portal === 'admin' ? 'admin@chamber.com' : 'your.managed@email.com'}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Password */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 border rounded-xl"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                className="absolute right-3 top-3"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </button>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-700">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-12 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-3 text-slate-500"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <Button type="submit" fullWidth isLoading={isLoading}>
-            Sign In
-          </Button>
-        </form>
+            <Button type="submit" fullWidth isLoading={isLoading}>
+              {portal === 'admin' ? 'Sign in to admin panel' : 'Sign in to lawyer / doctor workspace'}
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -55,7 +55,7 @@ interface ChamberContextType {
 const ChamberContext = createContext<ChamberContextType | undefined>(undefined);
 
 export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentAdmin } = useAuth();
+  const { currentAdmin, currentDoctor } = useAuth();
   const [chamber, setChamber] = useState<Chamber | null>(null);
   const [chamberPractices, setChamberPractices] = useState<Practice[]>([]);
   const [chamberUsers, setChamberUsers] = useState<Users[]>([]);
@@ -75,16 +75,19 @@ export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // 1. Fetch chamber + general collections
   useEffect(() => {
-      if (!currentAdmin) {
+      if (!currentAdmin && !currentDoctor) {
         setLoading(true);
         return;
       }
     
     // For main_admin, use selectedChamberId if set, otherwise show selection page
-    // For other roles, use currentAdmin.chamberId (or hospitalId for backward compatibility)
+    // For lawyers/doctors (web portal), use chamber on their user profile
+    // For other admin roles, use currentAdmin.chamberId (or hospitalId for backward compatibility)
     let chamberId: string | undefined;
-    
-    if (currentAdmin.baseRole === 'main_admin') {
+
+    if (currentDoctor) {
+      chamberId = currentDoctor.chamberId;
+    } else if (currentAdmin!.baseRole === 'main_admin') {
       chamberId = selectedChamberId || undefined;
       // If main_admin but no chamber selected, don't load chamber data
       if (!selectedChamberId) {
@@ -100,11 +103,11 @@ export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
     } else {
-      chamberId = (currentAdmin as any).chamberId || (currentAdmin as any).hospitalId;
+      chamberId = currentAdmin!.chamberId || currentAdmin!.hospitalId;
     }
 
     if (!chamberId) {
-      console.warn('Admin has no chamberId');
+      console.warn('No chamberId on profile');
       setLoading(false);
       setChamber(null);
       setChamberPractices([]);
@@ -171,7 +174,7 @@ export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ child
       unsubReferrals();
       unsubNotifications();
     };
-  }, [currentAdmin, selectedChamberId]);
+  }, [currentAdmin, currentDoctor, selectedChamberId]);
 
   // 2. Fetch practices after chamber is loaded
   useEffect(() => {
@@ -502,8 +505,8 @@ const addUser = async (user: Omit<Users, 'id'>, authUid: string): Promise<string
 
   // Notification functions
   const markNotificationAsRead = async (notificationId: string) => {
-    if (!currentAdmin || !chamber) {
-      console.warn('Cannot mark notification as read: no admin or chamber');
+    if ((!currentAdmin && !currentDoctor) || !chamber) {
+      console.warn('Cannot mark notification as read: no session or chamber');
       throw new Error('Not authenticated or chamber not loaded');
     }
 

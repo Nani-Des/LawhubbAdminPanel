@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "firebase deploy --only hosting"
   },
   "dependencies": {
     "@tippyjs/react": "^4.2.6",
     "@types/react-datepicker": "^6.2.0",
+    "agora-rtc-sdk-ng": "^4.24.3",
     "chart.js": "^4.4.9",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
@@ -23,6 +25,7 @@
     "react-datepicker": "^8.4.0",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.5.2",
+    "react-pdf": "^10.4.1",
     "react-router-dom": "^6.22.3",
     "tippy.js": "^6.3.7",
     "xlsx": "^0.18.5"
