@@ -81,7 +81,7 @@ export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     
     // For main_admin, use selectedChamberId if set, otherwise show selection page
-    // For lawyers/doctors (web portal), use chamber on their user profile
+    // For member workspace (web portal), use chamber on their user profile
     // For other admin roles, use currentAdmin.chamberId (or hospitalId for backward compatibility)
     let chamberId: string | undefined;
 

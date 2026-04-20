@@ -223,7 +223,7 @@ const Attachments: React.FC = () => {
             <SearchSkeleton />
           ) : (
             <Input
-              placeholder="Search by serial number, client name, lawyer, etc..."
+              placeholder="Search by serial number, client name, referrer, etc..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-md bg-gray-100 border-gray-200 text-teal-900 placeholder-teal-600"

@@ -112,7 +112,7 @@ const DoctorReferralsPage: React.FC = () => {
         </div>
 
         <Input
-          placeholder="Search by client, lawyer, or serial number..."
+          placeholder="Search by client, referrer, or serial number..."
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
@@ -138,7 +138,7 @@ const DoctorReferralsPage: React.FC = () => {
                   <Table.Head>Client</Table.Head>
                   <Table.Head>Sex</Table.Head>
                   <Table.Head>Reason</Table.Head>
-                  <Table.Head>Referring lawyer</Table.Head>
+                  <Table.Head>Referrer</Table.Head>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
@@ -196,7 +196,7 @@ const DoctorReferralsPage: React.FC = () => {
             setLawyerModalOpen(false);
             setSelectedLawyer(null);
           }}
-          title="Referring lawyer"
+          title="Referrer"
           size="md"
         >
           {lawyerLoading ? (

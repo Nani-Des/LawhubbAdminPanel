@@ -5,7 +5,7 @@ import {
   LogOut,
   Menu,
   X,
-  Stethoscope,
+  Briefcase,
   RefreshCw,
   PlusCircle,
   BookOpen,
@@ -72,10 +72,10 @@ const DoctorLayout: React.FC<DoctorLayoutProps> = ({ children }) => {
               </button>
               <div className="flex items-center gap-2">
                 <div className="rounded-xl bg-gradient-to-br from-teal-400/25 to-teal-600/10 p-2.5 ring-1 ring-teal-400/20">
-                  <Stethoscope className="h-6 w-6 text-teal-300" />
+                  <Briefcase className="h-6 w-6 text-teal-300" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold leading-tight tracking-tight">LawHubb — Lawyer workspace</p>
+                  <p className="text-sm font-semibold leading-tight tracking-tight">LawHubb — Member workspace</p>
                   <p className="text-xs text-slate-400 truncate max-w-[200px] sm:max-w-md">
                     {chamber?.['Chamber Name'] || chamber?.name || currentDoctor?.chamberName || 'Your chamber'}
                   </p>
@@ -84,7 +84,7 @@ const DoctorLayout: React.FC<DoctorLayoutProps> = ({ children }) => {
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium">{currentDoctor?.name || 'Doctor'}</p>
+                <p className="text-sm font-medium">{currentDoctor?.name || 'Member'}</p>
                 <p className="text-xs text-slate-400">Signed in</p>
               </div>
               <button

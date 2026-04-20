@@ -216,7 +216,7 @@ const LawyersPage: React.FC = () => {
         },
         (error) => {
           console.error("Error fetching users:", error);
-          toast.error("Failed to fetch lawyers");
+          toast.error("Failed to fetch members");
           setIsPageLoading(false);
         }
       );
@@ -260,7 +260,7 @@ const LawyersPage: React.FC = () => {
   const availablePermissions = [
     { key: "departments", label: "Departments" },
     { key: "medical_records", label: "Attachments" },
-    { key: "lawyers", label: "Lawyers" },
+    { key: "lawyers", label: "Members" },
     { key: "shift_schedule", label: "Shift Schedule" },
     { key: "services", label: "Services" },
     { key: "referrals", label: "Referrals" },
@@ -418,7 +418,7 @@ const LawyersPage: React.FC = () => {
       toast.success(`User ${user.Email} ${enable ? "enabled" : "disabled"}`);
     } catch (err) {
       console.error(`Failed to ${enable ? "enable" : "disable"} lawyer:`, err);
-      toast.error(`Failed to ${enable ? "enable" : "disable"} lawyer`);
+      toast.error(`Failed to ${enable ? "enable" : "disable"} member`);
     } finally {
       setIsLoading(false);
     }
@@ -463,7 +463,7 @@ const LawyersPage: React.FC = () => {
 
       // Prevent making changes to hospital_admin users
       if ((user as any).baseRole === "hospital_admin") {
-        toast.error("Cannot modify admin status for hospital_admin users");
+        toast.error("Cannot modify admin status for primary chamber administrators");
         setIsMakeAdminModalOpen(false);
         setSelectedPermissions([]);
         setSelectedUser(null);
@@ -498,7 +498,7 @@ const LawyersPage: React.FC = () => {
 
       // Prevent removing admin status from hospital_admin users
       if ((user as any).baseRole === "hospital_admin") {
-        toast.error("Cannot remove admin status from hospital_admin users");
+        toast.error("Cannot remove admin status from primary chamber administrators");
         setIsRemoveAdminModalOpen(false);
         setSelectedUser(null);
         setIsLoading(false);
@@ -533,6 +533,7 @@ const LawyersPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    let createdAuthUser: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>['user'] | null = null;
     try {
       if (!formData["Department ID"]) {
         toast.error("Please select a department");
@@ -554,7 +555,7 @@ const LawyersPage: React.FC = () => {
             "User Pic": imageUrl || user["User Pic"],
             Designation: formData.Designation,
           });
-          toast.success("Lawyer updated successfully");
+          toast.success("Member updated successfully");
         }
         setIsEditModalOpen(false);
       } else {
@@ -565,6 +566,7 @@ const LawyersPage: React.FC = () => {
           formData.Email,
           password
         );
+        createdAuthUser = userCredential.user;
 
         await updateProfile(userCredential.user, {
           displayName: `${formData.Fname} ${formData.Lname}`,
@@ -611,19 +613,24 @@ const LawyersPage: React.FC = () => {
             "Shift Switch": scheduleData["Shift Switch"],
           });
 
-          toast.success("Lawyer added successfully");
-          toast.success(`Lawyer password: ${password}`, { duration: 10000 });
+          toast.success("Member added successfully");
+          toast.success(`Temporary password: ${password}`, { duration: 10000 });
         }
         setIsAddModalOpen(false);
       }
       resetForm();
     } catch (err) {
       console.error("Failed to save lawyer:", err);
-      toast.error("Failed to save lawyer");
+      const firebaseError = err as { code?: string };
+      if (firebaseError?.code === "auth/email-already-in-use") {
+        toast.error("This email is already in use. Use a different email.");
+      } else {
+        toast.error("Failed to save member");
+      }
 
-      if (formData.Email && !selectedUser) {
+      if (createdAuthUser) {
         try {
-          await deleteUser(auth.currentUser!);
+          await deleteUser(createdAuthUser);
         } catch (cleanupErr) {
           console.error("Failed to clean up auth account:", cleanupErr);
         }
@@ -795,9 +802,9 @@ const LawyersPage: React.FC = () => {
         ) : (
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Lawyers</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Members</h1>
               <p className="mt-2 text-base text-teal-700">
-                Manage your chamber's lawyers and their schedules
+                Manage your chamber's members and their schedules
               </p>
             </div>
             <Button
@@ -808,7 +815,7 @@ const LawyersPage: React.FC = () => {
               className="flex items-center bg-gray-600 hover:bg-gray-700 text-white"
             >
               <Plus className="w-5 h-5 mr-2" />
-              Add Lawyer
+              Add member
             </Button>
           </div>
         )}
@@ -832,8 +839,8 @@ const LawyersPage: React.FC = () => {
           <div className="text-center py-10">
             <p className="text-teal-600 text-lg">
               {searchTerm
-                ? "No lawyers found matching your search."
-                : "No lawyers available."}
+                ? "No members found matching your search."
+                : "No members available."}
             </p>
           </div>
         )}
@@ -1047,7 +1054,7 @@ const LawyersPage: React.FC = () => {
             setIsAddModalOpen(false);
             resetForm();
           }}
-          title={formStep === 1 ? "Add Lawyer Details" : "Set Schedule"}
+          title={formStep === 1 ? "Add member details" : "Set Schedule"}
           size="lg"
         >
           {isPageLoading ? (
@@ -1245,7 +1252,7 @@ const LawyersPage: React.FC = () => {
                       className="bg-gray-600 hover:bg-gray-700 text-white"
                       disabled={isLoading}
                     >
-                      {isLoading ? "Adding..." : "Add Lawyer"}
+                      {isLoading ? "Adding..." : "Add member"}
                     </Button>
                   </div>
                 </div>
@@ -1262,7 +1269,7 @@ const LawyersPage: React.FC = () => {
             setSelectedUser(null);
             resetForm();
           }}
-          title="Edit Lawyer"
+          title="Edit member"
           size="lg"
         >
           {isPageLoading ? (
@@ -1425,7 +1432,7 @@ const LawyersPage: React.FC = () => {
                 className="bg-gray-600 hover:bg-gray-700 text-white"
                 disabled={isLoading || departments.length === 0}
               >
-                {isLoading ? "Updating..." : "Update Lawyer"}
+                {isLoading ? "Updating..." : "Update member"}
               </Button>
             </form>
           )}
@@ -1453,7 +1460,7 @@ const LawyersPage: React.FC = () => {
             setSelectedUser(null);
             setNewPassword("");
           }}
-          title="Reset Lawyer Password"
+          title="Reset member password"
           size="md"
         >
           <form onSubmit={handleResetPassword} className="space-y-6">
@@ -1577,9 +1584,8 @@ const LawyersPage: React.FC = () => {
                   Cannot Remove Admin Status
                 </p>
                 <p className="text-teal-700">
-                  Users with <span className="font-semibold">hospital_admin</span> role
-                  cannot have their admin status removed or permissions modified. This is a
-                  protected role.
+                  Primary chamber administrator accounts cannot have their admin status removed or
+                  permissions modified. This is a protected role.
                 </p>
                 <Button
                   type="button"

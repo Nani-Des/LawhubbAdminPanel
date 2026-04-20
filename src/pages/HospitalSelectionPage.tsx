@@ -70,9 +70,9 @@ const HospitalSelectionPage: React.FC = () => {
       <div className="space-y-6 bg-gray-50 p-6 rounded-lg">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-teal-900">Select Hospital</h1>
+          <h1 className="text-3xl font-bold text-teal-900">Select chamber</h1>
           <p className="mt-2 text-base text-teal-700">
-            Choose a hospital to manage as {currentAdmin?.baseRole === 'main_admin' ? 'Super Admin' : 'Admin'}
+            Choose a chamber to manage as {currentAdmin?.baseRole === 'main_admin' ? 'Super Admin' : 'Admin'}
           </p>
         </div>
 
@@ -81,7 +81,7 @@ const HospitalSelectionPage: React.FC = () => {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-teal-600" />
             <Input
-              placeholder="Search hospitals by name or location..."
+              placeholder="Search chambers by name or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 bg-gray-100 border-gray-200 text-teal-900 placeholder-teal-600"
@@ -93,7 +93,7 @@ const HospitalSelectionPage: React.FC = () => {
         {!loading && filteredHospitals.length === 0 && (
           <div className="text-center py-10">
             <p className="text-teal-600 text-lg">
-              {searchTerm ? 'No hospitals found matching your search.' : 'No hospitals available.'}
+              {searchTerm ? 'No chambers found matching your search.' : 'No chambers available.'}
             </p>
           </div>
         )}

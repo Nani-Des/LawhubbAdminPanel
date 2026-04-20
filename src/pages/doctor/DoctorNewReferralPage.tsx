@@ -145,11 +145,11 @@ const DoctorNewReferralPage: React.FC = () => {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Client / patient name *</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Client name *</label>
               <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} required />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Registration no.</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Client reference no.</label>
               <Input value={patientReg} onChange={(e) => setPatientReg(e.target.value)} />
             </div>
             <div>
@@ -176,7 +176,7 @@ const DoctorNewReferralPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Examination findings</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Matter background</label>
             <textarea
               value={examFindings}
               onChange={(e) => setExamFindings(e.target.value)}
@@ -194,7 +194,7 @@ const DoctorNewReferralPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Diagnosis</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Assessment</label>
             <Input value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
           </div>
           <div>

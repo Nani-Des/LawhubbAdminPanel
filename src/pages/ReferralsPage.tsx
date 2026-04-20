@@ -189,7 +189,7 @@ const ReferralsPage: React.FC = () => {
             <SearchBarSkeleton />
           ) : (
             <Input
-              placeholder="Search by client, lawyer, or serial number..."
+              placeholder="Search by client, referrer, or serial number..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -234,7 +234,7 @@ const ReferralsPage: React.FC = () => {
                   <Table.Head className="text-gray-900 font-semibold">Client Name</Table.Head>
                   <Table.Head className="text-gray-900 font-semibold">Sex</Table.Head>
                   <Table.Head className="text-gray-900 font-semibold">Reason</Table.Head>
-                  <Table.Head className="text-gray-900 font-semibold">Referring Lawyer</Table.Head>
+                  <Table.Head className="text-gray-900 font-semibold">Referrer</Table.Head>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
@@ -306,7 +306,7 @@ const ReferralsPage: React.FC = () => {
             setLawyerModalOpen(false);
             setSelectedLawyer(null);
           }}
-          title="Referring Lawyer Details"
+          title="Referrer details"
           size="md"
         >
           {lawyerLoading ? (
@@ -314,7 +314,7 @@ const ReferralsPage: React.FC = () => {
               <Spinner />
             </div>
           ) : !selectedLawyer ? (
-            <p className="text-teal-600 text-center py-6">No lawyer information available.</p>
+            <p className="text-teal-600 text-center py-6">No referrer information available.</p>
           ) : (
             <div className="space-y-4">
               <div className="flex items-center space-x-4">

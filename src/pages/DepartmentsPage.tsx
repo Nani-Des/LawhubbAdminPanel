@@ -196,7 +196,7 @@ const DepartmentForm = React.memo(
               : selectedDepartment
               ? 'Update Department'
               : mode === 'select'
-              ? 'Add to Hospital'
+              ? 'Add to chamber'
               : 'Create and Add Department'}
           </Button>
         </div>
@@ -671,7 +671,7 @@ const DepartmentsPage: React.FC = () => {
             <p className="text-gray-700">
               Are you sure you want to remove the department "
               {((departments.find((d) => d.id === selectedDepartment) as any)?.['Practice Name'] || (departments.find((d) => d.id === selectedDepartment) as any)?.['Department Name'] || '')}" from the
-              hospital? This action cannot be undone.
+              chamber? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-2">
               <Button

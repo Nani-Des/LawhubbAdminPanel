@@ -40,6 +40,7 @@ interface BulkUploadModalProps {
   departments: Array<{ id: string; 'Practice ID'?: string; 'Practice Name'?: string; 'Department ID'?: string; 'Department Name'?: string }>;
   Title: string[];
   Region: string[];
+  existingUsers?: Array<{ Email?: string }>;
 }
 
 const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
@@ -68,8 +69,8 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
         'Last Name*': 'Doe',
         'Email*': 'john.doe@example.com',
         'Mobile Number*': '+1234567890',
-        'Title*': 'Dr.',
-        'Designation*': 'Senior Lawyer',
+        'Title*': 'Mr.',
+        'Designation*': 'Senior Associate',
         'Practice Name*': departments[0]?.['Practice Name'] || departments[0]?.['Department Name'] || '',
         'Region*': 'Greater Accra',
         'Profile Picture URL': '',
@@ -89,7 +90,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
         'Email*': `jane${i + 1}.smith@example.com`,
         'Mobile Number*': `+123456789${i + 1}`,
         'Title*': 'Mr.',
-        'Designation*': 'Lawyer',
+        'Designation*': 'Associate',
         'Practice Name*': departments[0]?.['Practice Name'] || departments[0]?.['Department Name'] || '',
         'Region*': 'Ashanti',
         'Profile Picture URL': '',
@@ -103,12 +104,12 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
 
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Lawyers');
+    XLSX.utils.book_append_sheet(wb, ws, 'Members');
 
     // Add instructions sheet
     const instructions = [
-      { Column: 'First Name*', Description: 'Required. First name of the lawyer', Valid_Values: 'Any text' },
-      { Column: 'Last Name*', Description: 'Required. Last name of the lawyer', Valid_Values: 'Any text' },
+      { Column: 'First Name*', Description: 'Required. First name of the member', Valid_Values: 'Any text' },
+      { Column: 'Last Name*', Description: 'Required. Last name of the member', Valid_Values: 'Any text' },
       { Column: 'Email*', Description: 'Required. Unique email address', Valid_Values: 'Valid email format' },
       { Column: 'Mobile Number*', Description: 'Required. Contact number', Valid_Values: 'Any format' },
       { Column: 'Title*', Description: 'Required. Title prefix', Valid_Values: Title.filter(t => t !== 'Select a title').join(', ') },
@@ -125,7 +126,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     const instructionsWs = XLSX.utils.json_to_sheet(instructions);
     XLSX.utils.book_append_sheet(wb, instructionsWs, 'Instructions');
 
-    XLSX.writeFile(wb, 'lawyer_bulk_upload_template.xlsx');
+    XLSX.writeFile(wb, 'member_bulk_upload_template.xlsx');
     toast.success('Template downloaded successfully!');
   }, [departments, Title, Region]);
 
@@ -136,7 +137,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
         {
           children: [
             new Paragraph({
-              text: "Lawyer Bulk Upload Template - Field Legend",
+              text: "Member bulk upload template — field legend",
               heading: HeadingLevel.HEADING_1,
             }),
             new Paragraph({
@@ -161,21 +162,21 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                 new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph("First Name*")] }),
-                    new TableCell({ children: [new Paragraph("The lawyer's first name (given name)")] }),
+                    new TableCell({ children: [new Paragraph("The member's first name (given name)")] }),
                     new TableCell({ children: [new Paragraph("Any text (e.g., John, Mary, Kwame)")] }),
                   ],
                 }),
                 new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph("Last Name*")] }),
-                    new TableCell({ children: [new Paragraph("The lawyer's last name (surname)")] }),
+                    new TableCell({ children: [new Paragraph("The member's last name (surname)")] }),
                     new TableCell({ children: [new Paragraph("Any text (e.g., Doe, Smith, Mensah)")] }),
                   ],
                 }),
                 new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph("Email*")] }),
-                    new TableCell({ children: [new Paragraph("Unique email address for the lawyer. Used for login credentials.")] }),
+                    new TableCell({ children: [new Paragraph("Unique email address for the member. Used for login credentials.")] }),
                     new TableCell({ children: [new Paragraph("Valid email format (e.g., john.doe@example.com). Must be unique across all users.")] }),
                   ],
                 }),
@@ -197,20 +198,20 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                   children: [
                     new TableCell({ children: [new Paragraph("Designation*")] }),
                     new TableCell({ children: [new Paragraph("Job title or professional designation")] }),
-                    new TableCell({ children: [new Paragraph("Any text (e.g., Senior Lawyer, Junior Associate, Partner)")] }),
+                    new TableCell({ children: [new Paragraph("Any text (e.g., Senior Associate, Junior Associate, Partner)")] }),
                   ],
                 }),
                 new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph("Practice Name*")] }),
-                    new TableCell({ children: [new Paragraph("The practice area the lawyer belongs to. Must exactly match an existing practice name.")] }),
+                    new TableCell({ children: [new Paragraph("The practice area the member belongs to. Must exactly match an existing practice name.")] }),
                     new TableCell({ children: [new Paragraph(departments.map(d => d['Practice Name'] || d['Department Name'] || '').filter(Boolean).join(', ') || 'Available practices from your system')] }),
                   ],
                 }),
                 new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph("Region*")] }),
-                    new TableCell({ children: [new Paragraph("Geographic region where the lawyer operates")] }),
+                    new TableCell({ children: [new Paragraph("Geographic region where the member works")] }),
                     new TableCell({ children: [new Paragraph(Region.filter(r => r !== 'Select a region').join(', '))] }),
                   ],
                 }),
@@ -269,7 +270,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                 new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph("Profile Picture URL")] }),
-                    new TableCell({ children: [new Paragraph("URL to the lawyer's profile picture image")] }),
+                    new TableCell({ children: [new Paragraph("URL to the member's profile picture")] }),
                     new TableCell({ children: [new Paragraph("Valid URL to an image file (e.g., https://example.com/photo.jpg). Leave empty if not available.")] }),
                   ],
                 }),
@@ -281,7 +282,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
               spacing: { before: 400, after: 200 },
             }),
             new Paragraph({
-              text: "• All required fields (marked with *) must be filled in for each lawyer.",
+              text: "• All required fields (marked with *) must be filled in for each member.",
               spacing: { after: 100 },
             }),
             new Paragraph({
@@ -293,7 +294,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
               spacing: { after: 100 },
             }),
             new Paragraph({
-              text: "• Schedule fields (Active Days, Off Days, etc.) define the work pattern for the lawyer.",
+              text: "• Schedule fields (Active Days, Off Days, etc.) define the work pattern for the member.",
               spacing: { after: 100 },
             }),
             new Paragraph({
@@ -306,7 +307,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     });
 
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, 'lawyer_bulk_upload_field_legend.docx');
+    saveAs(blob, 'member_bulk_upload_field_legend.docx');
     toast.success('Field legend document downloaded successfully!');
   }, [departments, Title, Region]);
 
@@ -463,7 +464,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
 
         setLawyerData(mappedData);
         setStep('preview');
-        toast.success(`Loaded ${mappedData.length} lawyer(s) from file`);
+        toast.success(`Loaded ${mappedData.length} member(s) from file`);
       } catch (error) {
         console.error('Error parsing Excel file:', error);
         toast.error('Failed to parse Excel file. Please check the format.');
@@ -527,7 +528,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
   // Handle bulk import
   const handleBulkImport = useCallback(async () => {
     if (selectedLawyers.length === 0) {
-      toast.error('Please select at least one valid lawyer to import');
+      toast.error('Please select at least one valid member to import');
       return;
     }
 
@@ -556,10 +557,10 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       setImportResults(results);
       
       if (results.success > 0) {
-        toast.success(`Successfully imported ${results.success} lawyer(s)`);
+        toast.success(`Successfully imported ${results.success} member(s)`);
       }
       if (results.failed > 0) {
-        toast.error(`Failed to import ${results.failed} lawyer(s)`);
+        toast.error(`Failed to import ${results.failed} member(s)`);
       }
 
       // Wait a bit before closing to show results
@@ -568,7 +569,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       }, 2000);
     } catch (error) {
       console.error('Bulk import error:', error);
-      toast.error('Failed to import lawyers');
+      toast.error('Failed to import members');
       setStep('preview');
     } finally {
       setIsProcessing(false);
@@ -589,9 +590,9 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       isOpen={isOpen}
       onClose={handleClose}
       title={
-        step === 'upload' ? 'Bulk Upload Lawyers' :
-        step === 'preview' ? 'Review & Edit Lawyer Data' :
-        'Importing Lawyers...'
+        step === 'upload' ? 'Bulk upload members' :
+        step === 'preview' ? 'Review & edit member data' :
+        'Importing members…'
       }
       size="xl"
     >
@@ -601,10 +602,10 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
             <h3 className="font-semibold text-gray-900 mb-2">Instructions:</h3>
             <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
               <li>Download the Excel template below</li>
-              <li>Fill in the lawyer data (required fields are marked with *)</li>
+              <li>Fill in the member data (required fields are marked with *)</li>
               <li>Upload the completed file</li>
               <li>Review and edit the data in the preview</li>
-              <li>Select the lawyers you want to import</li>
+              <li>Select the members you want to import</li>
               <li>Confirm the import</li>
             </ol>
           </div>
@@ -895,7 +896,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                   Processing...
                 </>
               ) : (
-                `Import ${selectedLawyers.length} Lawyer(s)`
+                `Import ${selectedLawyers.length} member(s)`
               )}
             </Button>
           </div>
@@ -905,7 +906,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       {step === 'importing' && (
         <div className="space-y-4 text-center py-8">
           <Loader2 className="w-12 h-12 mx-auto animate-spin text-gray-600" />
-          <p className="text-gray-900 font-medium">Importing lawyers...</p>
+          <p className="text-gray-900 font-medium">Importing members…</p>
           {importResults && (
             <div className="mt-4 space-y-2">
               {importResults.success > 0 && (

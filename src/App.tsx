@@ -44,7 +44,7 @@ const AdminProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children
   return <>{children}</>;
 };
 
-/** Lawyers / doctors (Users.Role === true) — separate workspace */
+/** Chamber members (Users.Role === true) — separate workspace; routes under /doctor are legacy paths */
 const DoctorProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, currentAdmin, currentDoctor } = useAuth();
 

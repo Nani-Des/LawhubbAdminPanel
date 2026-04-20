@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, LoginPortal } from '../contexts/AuthContext';
 import Button from '../components/ui/Button';
-import { Lock, Mail, Eye, EyeOff, Building2, Stethoscope } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Building2, Briefcase } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const LoginPage: React.FC = () => {
@@ -33,7 +33,7 @@ const LoginPage: React.FC = () => {
     } else {
       toast.error(
         portal === 'doctor'
-          ? 'Sign-in failed. Check your email and password, or confirm your lawyer account is active.'
+          ? 'Sign-in failed. Check your email and password, or confirm your member account is active.'
           : 'Sign-in failed. Check your email and password, or use an administrator account.'
       );
     }
@@ -72,10 +72,10 @@ const LoginPage: React.FC = () => {
                 : 'border-slate-200 bg-white/80 hover:border-slate-300'
             }`}
           >
-            <Stethoscope className={`h-8 w-8 ${portal === 'doctor' ? 'text-teal-600' : 'text-slate-400'}`} />
-            <p className="mt-2 font-semibold text-slate-900">Lawyer / doctor</p>
+            <Briefcase className={`h-8 w-8 ${portal === 'doctor' ? 'text-teal-600' : 'text-slate-400'}`} />
+            <p className="mt-2 font-semibold text-slate-900">Member workspace</p>
             <p className="mt-1 text-xs text-slate-600">
-              For lawyers and doctors: use the same email and password as the LawHubb app. You can handle referrals,
+              For chamber members: use the same email and password as the LawHubb app. You can handle referrals,
               your library, chats, and video calls here.
             </p>
           </button>
@@ -83,7 +83,7 @@ const LoginPage: React.FC = () => {
 
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
           <h2 className="text-lg font-semibold text-center mb-6 text-slate-800">
-            {portal === 'admin' ? 'Sign in as administrator' : 'Sign in as lawyer or doctor'}
+            {portal === 'admin' ? 'Sign in as administrator' : 'Sign in as chamber member'}
           </h2>
 
           <form onSubmit={handleLogin} className="space-y-5">
@@ -125,7 +125,7 @@ const LoginPage: React.FC = () => {
             </div>
 
             <Button type="submit" fullWidth isLoading={isLoading}>
-              {portal === 'admin' ? 'Sign in to admin panel' : 'Sign in to lawyer / doctor workspace'}
+              {portal === 'admin' ? 'Sign in to admin panel' : 'Sign in to member workspace'}
             </Button>
           </form>
         </div>

@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { User } from 'firebase/auth';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  where,
+} from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const PORTAL_STORAGE_KEY = 'lawhubb_login_portal';
-/** Persists across reloads so we know whether to restore admin or lawyer/doctor session */
+/** Persists across reloads so we know whether to restore admin or member workspace session */
 const SESSION_KIND_KEY = 'lawhubb_session_kind';
+/** Obsolete bulk-import keys; if left in sessionStorage they used to make auth callback exit early. */
+const LEGACY_BULK_IMPORT = 'bulkImportInProgress';
+const LEGACY_EXPECTED_ADMIN_UID = 'expectedAdminUid';
 
 export type LoginPortal = 'admin' | 'doctor';
 
@@ -51,6 +63,56 @@ function resolveChamberIdFromUser(userData: Record<string, unknown>): string | u
   return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
 }
 
+function readBaseRole(userData: Record<string, unknown>): unknown {
+  return userData.baseRole ?? userData.BaseRole ?? userData['Base Role'];
+}
+
+function isTruthyFlag(v: unknown): boolean {
+  return v === true || v === 1;
+}
+
+function isDoctorRoleAndStatus(userData: Record<string, unknown>): boolean {
+  return isTruthyFlag(userData.Role) && isTruthyFlag(userData.Status);
+}
+
+function isAdminBaseRole(br: unknown, adminRoles: readonly string[]): boolean {
+  if (typeof br !== 'string' || !br.trim()) return false;
+  const trimmed = br.trim();
+  const normalized = trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+  return adminRoles.some((r) => r === trimmed || r === normalized);
+}
+
+/** Auth user uid is usually the Firestore doc id, but legacy data may use another id + User ID / Email. */
+async function fetchUsersProfile(user: User): Promise<Record<string, unknown> | null> {
+  const uidRef = await getDoc(doc(db, 'Users', user.uid));
+  if (uidRef.exists()) {
+    return uidRef.data() as Record<string, unknown>;
+  }
+
+  const tryUserIdField = query(
+    collection(db, 'Users'),
+    where('User ID', '==', user.uid),
+    limit(1)
+  );
+  const byUserId = await getDocs(tryUserIdField);
+  if (!byUserId.empty) {
+    return byUserId.docs[0].data() as Record<string, unknown>;
+  }
+
+  const email = user.email?.trim();
+  if (email) {
+    for (const em of [email, email.toLowerCase()]) {
+      const byEmail = query(collection(db, 'Users'), where('Email', '==', em), limit(1));
+      const emailSnap = await getDocs(byEmail);
+      if (!emailSnap.empty) {
+        return emailSnap.docs[0].data() as Record<string, unknown>;
+      }
+    }
+  }
+
+  return null;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentAdmin, setCurrentAdmin] = useState<AdminSession | null>(null);
   const [currentDoctor, setCurrentDoctor] = useState<DoctorSession | null>(null);
@@ -65,29 +127,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const isBulkImporting = sessionStorage.getItem('bulkImportInProgress') === 'true';
-      const expectedAdminUid = sessionStorage.getItem('expectedAdminUid');
-
-      if (isBulkImporting && expectedAdminUid && user.uid !== expectedAdminUid) {
-        return;
-      }
+      sessionStorage.removeItem(LEGACY_BULK_IMPORT);
+      sessionStorage.removeItem(LEGACY_EXPECTED_ADMIN_UID);
 
       const portalFromLogin = sessionStorage.getItem(PORTAL_STORAGE_KEY) as LoginPortal | null;
       const persistedKind = sessionStorage.getItem(SESSION_KIND_KEY) as LoginPortal | null;
       let portal: LoginPortal | null =
         portalFromLogin || (persistedKind === 'doctor' || persistedKind === 'admin' ? persistedKind : null);
 
-      const userRef = doc(db, 'Users', user.uid);
-      const userSnap = await getDoc(userRef);
+      const userData = await fetchUsersProfile(user);
 
-      if (!userSnap.exists()) {
+      if (!userData) {
         await signOut(auth);
         sessionStorage.removeItem(PORTAL_STORAGE_KEY);
         sessionStorage.removeItem(SESSION_KIND_KEY);
         return;
       }
-
-      const userData = userSnap.data() as Record<string, unknown>;
 
       const adminRoles = [
         'hospital_admin',
@@ -95,12 +150,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'chamber_admin',
         'chamber_manager',
         'main_admin',
-      ];
+      ] as const;
       if (!portal) {
-        const brEarly = userData.baseRole;
-        if (typeof brEarly === 'string' && adminRoles.includes(brEarly)) {
+        const brEarly = readBaseRole(userData);
+        if (isAdminBaseRole(brEarly, adminRoles)) {
           portal = 'admin';
-        } else if (userData.Role === true && userData.Status === true) {
+        } else if (isDoctorRoleAndStatus(userData)) {
           portal = 'doctor';
         }
       }
@@ -119,8 +174,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       if (portal === 'doctor') {
-        const roleOk = userData.Role === true;
-        const statusOk = userData.Status === true;
+        const roleOk = isTruthyFlag(userData.Role);
+        const statusOk = isTruthyFlag(userData.Status);
         if (!roleOk || !statusOk) {
           await signOut(auth);
           sessionStorage.removeItem(PORTAL_STORAGE_KEY);
@@ -146,8 +201,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (portal === 'admin') {
-        const br = userData.baseRole;
-        if (typeof br !== 'string' || !adminRoles.includes(br)) {
+        const brRaw = readBaseRole(userData);
+        if (!isAdminBaseRole(brRaw, adminRoles)) {
+          await signOut(auth);
+          sessionStorage.removeItem(PORTAL_STORAGE_KEY);
+          sessionStorage.removeItem(SESSION_KIND_KEY);
+          return;
+        }
+
+        const trimmed = typeof brRaw === 'string' ? brRaw.trim() : '';
+        const normalizedRole = trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+        const brCanonical = adminRoles.find((r) => r === trimmed || r === normalizedRole);
+        if (!brCanonical) {
           await signOut(auth);
           sessionStorage.removeItem(PORTAL_STORAGE_KEY);
           sessionStorage.removeItem(SESSION_KIND_KEY);
@@ -158,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let chamberName: string | undefined;
         let hospitalName: string | undefined;
         const resolvedChamberId = chamberId;
-        if (resolvedChamberId && br !== 'main_admin') {
+        if (resolvedChamberId && brCanonical !== 'main_admin') {
           const chamberRef = doc(db, 'Chamber', resolvedChamberId);
           const chamberSnap = await getDoc(chamberRef);
           if (chamberSnap.exists()) {
@@ -173,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentAdmin({
           kind: 'admin',
           uid: user.uid,
-          baseRole: br as AdminSession['baseRole'],
+          baseRole: brCanonical as AdminSession['baseRole'],
           chamberId: (userData.chamberId || userData.hospitalId) as string | undefined,
           chamberName,
           hospitalId: (userData.hospitalId || userData.chamberId) as string | undefined,

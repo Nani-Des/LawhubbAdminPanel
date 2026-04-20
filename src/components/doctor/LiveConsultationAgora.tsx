@@ -117,7 +117,7 @@ const LiveConsultationAgora: React.FC<LiveConsultationAgoraProps> = ({ chatId, p
           <Video className="h-5 w-5 shrink-0 text-teal-400" />
           <div className="min-w-0">
             <p className="font-semibold truncate">Video call</p>
-            <p className="text-xs text-white/60 truncate">With {patientName}</p>
+            <p className="text-xs text-white/60 truncate">{patientName}</p>
           </div>
         </div>
         <Button

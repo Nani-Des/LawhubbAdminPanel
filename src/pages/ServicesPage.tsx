@@ -266,8 +266,8 @@ const ServicesPage: React.FC = () => {
     e.preventDefault();
 
     if (!hospital?.id) {
-      console.error('No hospital selected');
-      toast.error('No hospital selected');
+      console.error('No chamber selected');
+      toast.error('No chamber selected');
       return;
     }
 

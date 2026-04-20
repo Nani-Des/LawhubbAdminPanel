@@ -165,7 +165,7 @@ const DashboardPage: React.FC = () => {
     maintainAspectRatio: false,
   };
 
-  // Chart options for line graph (Lawyers)
+  // Chart options for line graph (members)
   const lineChartOptions = {
     scales: {
       x: { grid: { color: '#e5e7eb' } },
@@ -210,12 +210,12 @@ const DashboardPage: React.FC = () => {
     ],
   };
 
-  // Chart data for Lawyers (Line)
+  // Chart data for members (Line)
   const lawyersData = {
     labels: ['Your Chamber', 'Platform Average'],
     datasets: [
       {
-        label: 'Lawyers',
+        label: 'Members',
         data: [metrics.totalUsers, platformAverages.totalUsers],
         borderColor: '#374151',
         backgroundColor: '#374151',
@@ -275,7 +275,7 @@ const DashboardPage: React.FC = () => {
               <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200">
                 <div className="flex items-center mb-4">
                   <CircleUser className="h-6 w-6 text-gray-700" />
-                  <h3 className="ml-2 text-lg font-semibold text-gray-900">Lawyers</h3>
+                  <h3 className="ml-2 text-lg font-semibold text-gray-900">Members</h3>
                 </div>
                 <div className="h-32">
                   <Line data={lawyersData} options={lineChartOptions} />
@@ -316,7 +316,7 @@ const DashboardPage: React.FC = () => {
                   <>
                     <ActionCard
                     title="Shift Schedule"
-                    description="Manage lawyer shift schedules"
+                    description="Manage member shift schedules"
                       icon={<Users className="h-6 w-6 text-white" />}
                       path="/shift-schedule"
                     />
@@ -338,8 +338,8 @@ const DashboardPage: React.FC = () => {
                 )}
                 {hasPermission('lawyers') && (
                   <ActionCard
-                    title="Manage Lawyers"
-                    description="Manage lawyer profiles"
+                    title="Manage Members"
+                    description="Manage member profiles"
                     icon={<CircleUser className="h-6 w-6 text-white" />}
                     path="/lawyers"
                   />
@@ -355,7 +355,7 @@ const DashboardPage: React.FC = () => {
                 {hasPermission('reports') && (
                   <ActionCard
                     title="Generate Reports"
-                    description="Generate comprehensive reports on staff and patients"
+                    description="Generate comprehensive reports on staff and clients"
                     icon={<FileBarChart className="h-6 w-6 text-white" />}
                     path="/reports"
                   />

@@ -109,7 +109,7 @@ export const PrintSchedule: React.FC<PrintScheduleProps> = ({
 }) => {
   const { departments } = useHospital();
   const hospitalId = filteredUsers?.[0]?.['Chamber ID'] || 'default_hospital';
-  const [hospitalName, setHospitalName] = useState<string>('Default Hospital');
+  const [hospitalName, setHospitalName] = useState<string>('Default chamber');
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export const PrintSchedule: React.FC<PrintScheduleProps> = ({
       try {
         const chamberDoc = await getDoc(doc(db, 'Chamber', hospitalId));
         if (hospitalDoc.exists()) {
-          setHospitalName(hospitalDoc.data()['Name'] || 'Default Hospital');
+          setHospitalName(hospitalDoc.data()['Name'] || 'Default chamber');
         }
       } catch (e) {
         console.error('Failed to fetch hospital data:', e);
