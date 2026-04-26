@@ -265,7 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string, portal: LoginPortal): Promise<boolean> => {
     try {
       sessionStorage.setItem(PORTAL_STORAGE_KEY, portal);
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       return true;
     } catch (err) {
       console.error('Login failed:', err);

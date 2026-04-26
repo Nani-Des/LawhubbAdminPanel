@@ -23,14 +23,14 @@ import { storage } from "../firebase";
 import { Schedule } from "../types";
 import { toast } from "react-hot-toast";
 import {
-  createUserWithEmailAndPassword,
-  updateProfile,
   updateEmail,
   updatePassword,
   getAuth,
   deleteUser,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "../firebase";
+import { createManagedAuthUser, type ProvisionedAuthUser } from "../utils/managedAuthProvisioning";
 
 // Skeleton Loading Components
 const LawyerCardSkeleton = () => (
@@ -430,20 +430,39 @@ const LawyersPage: React.FC = () => {
     try {
       const user = users.find((u) => u.id === selectedUser);
       if (!user) return;
+      if (!user.Email) {
+        toast.error("Selected member does not have a valid email.");
+        return;
+      }
 
       const authUser = await getAuth().currentUser;
+      const isSelfReset = authUser?.uid === user.id;
 
-      if (authUser) {
-        await updatePassword(authUser, newPassword);
+      if (isSelfReset && authUser) {
+        const normalizedPassword = newPassword.trim();
+        const isAllowedPassword = /^[A-Za-z0-9]{6,}$/.test(normalizedPassword);
+        if (!isAllowedPassword) {
+          toast.error("Password must be at least 6 characters and contain only letters and numbers.");
+          return;
+        }
+        await updatePassword(authUser, normalizedPassword);
         toast.success(`Password reset for ${user.Email}`);
-        setIsResetPasswordModalOpen(false);
-        setNewPassword("");
       } else {
-        throw new Error("User not authenticated");
+        await sendPasswordResetEmail(auth, user.Email.trim());
+        toast.success(`Password reset email sent to ${user.Email}`);
       }
-    } catch (err) {
+
+      setIsResetPasswordModalOpen(false);
+      setNewPassword("");
+    } catch (err: any) {
       console.error("Failed to reset password:", err);
-      toast.error("Failed to reset password");
+      if (err?.code === "auth/weak-password") {
+        toast.error("Password is too weak. Use at least 6 letters/numbers.");
+      } else if (err?.code === "auth/requires-recent-login") {
+        toast.error("For direct password change, sign out and sign in again, then retry.");
+      } else {
+        toast.error("Failed to reset password");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -533,7 +552,7 @@ const LawyersPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    let createdAuthUser: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>['user'] | null = null;
+    let createdAuthUser: ProvisionedAuthUser | null = null;
     try {
       if (!formData["Department ID"]) {
         toast.error("Please select a department");
@@ -561,18 +580,14 @@ const LawyersPage: React.FC = () => {
       } else {
         const password = generateRandomPassword();
 
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
+        const managedAuthUser = await createManagedAuthUser(
           formData.Email,
-          password
+          password,
+          `${formData.Fname} ${formData.Lname}`
         );
-        createdAuthUser = userCredential.user;
+        createdAuthUser = managedAuthUser;
 
-        await updateProfile(userCredential.user, {
-          displayName: `${formData.Fname} ${formData.Lname}`,
-        });
-
-        const authUid = userCredential.user.uid;
+        const authUid = managedAuthUser.user.uid;
 
         const newUserId = await addUser(
           {
@@ -630,12 +645,17 @@ const LawyersPage: React.FC = () => {
 
       if (createdAuthUser) {
         try {
-          await deleteUser(createdAuthUser);
+          await deleteUser(createdAuthUser.user);
         } catch (cleanupErr) {
           console.error("Failed to clean up auth account:", cleanupErr);
+        } finally {
+          await createdAuthUser.release();
         }
       }
     } finally {
+      if (createdAuthUser) {
+        await createdAuthUser.release();
+      }
       setIsLoading(false);
     }
   };
@@ -1476,6 +1496,7 @@ const LawyersPage: React.FC = () => {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
+                helperText="For your own account: letters/numbers, 6+ chars (e.g. Des12345). For other members, a reset email is sent."
                 className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>

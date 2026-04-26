@@ -138,9 +138,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Filter navigation items based on permissions
   // Dashboard is always available, others require permission
   // main_admin has access to everything
+  const isMainAdminSelectingChamber =
+    currentAdmin?.baseRole === 'main_admin' && location.pathname === '/select-chamber';
+  const isMainAdminWithoutChamber = currentAdmin?.baseRole === 'main_admin' && !chamber?.id;
   const navItems = allNavItems.filter(item => {
+    if (isMainAdminSelectingChamber || isMainAdminWithoutChamber) return false;
     if (item.path === '/') return true; // Dashboard is always accessible
-    // main_admin has access to all pages
+    // main_admin has access to all pages after selecting a chamber
     if (currentAdmin?.baseRole === 'main_admin') return true;
     return hasPermission(item.permission);
   });
