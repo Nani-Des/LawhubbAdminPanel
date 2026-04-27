@@ -10,6 +10,7 @@ import {
   PlusCircle,
   BookOpen,
   MessagesSquare,
+  Lightbulb,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChamber } from '../../contexts/ChamberContext';
@@ -37,6 +38,7 @@ const DoctorLayout: React.FC<DoctorLayoutProps> = ({ children }) => {
     { label: 'Incoming referrals', path: '/doctor/referrals', icon: <RefreshCw className="w-5 h-5" /> },
     { label: 'New referral', path: '/doctor/referrals/new', icon: <PlusCircle className="w-5 h-5" /> },
     { label: 'Library', path: '/doctor/library', icon: <BookOpen className="w-5 h-5" /> },
+    { label: 'Law insights', path: '/doctor/insights', icon: <Lightbulb className="w-5 h-5" /> },
     {
       label: 'Messages & video',
       path: '/doctor/chats',

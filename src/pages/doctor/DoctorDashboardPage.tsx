@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useChamber } from '../../contexts/ChamberContext';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { RefreshCw, BookOpen, MessagesSquare, AlertCircle } from 'lucide-react';
+import { RefreshCw, BookOpen, MessagesSquare, AlertCircle, Lightbulb } from 'lucide-react';
 
 const DoctorDashboardPage: React.FC = () => {
   const { currentDoctor } = useAuth();
@@ -47,7 +47,7 @@ const DoctorDashboardPage: React.FC = () => {
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Link
             to="/doctor/referrals"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
@@ -74,6 +74,14 @@ const DoctorDashboardPage: React.FC = () => {
             <MessagesSquare className="h-8 w-8 text-teal-600" />
             <p className="mt-3 font-semibold text-slate-900">Messages & video</p>
             <p className="mt-1 text-sm text-slate-500">Message clients and start video calls</p>
+          </Link>
+          <Link
+            to="/doctor/insights"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
+          >
+            <Lightbulb className="h-8 w-8 text-teal-600" />
+            <p className="mt-3 font-semibold text-slate-900">Law insights</p>
+            <p className="mt-1 text-sm text-slate-500">Create and browse legal content posts</p>
           </Link>
         </div>
       </div>

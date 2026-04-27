@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import DoctorLayout from '../../components/layout/DoctorLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
@@ -14,11 +14,20 @@ import {
   where,
   limit,
 } from 'firebase/firestore';
+import { fetchAndActivate, getRemoteConfig, getValue, isSupported } from 'firebase/remote-config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase';
+import { app, auth, db, storage } from '../../firebase';
 import toast from 'react-hot-toast';
-import { ExternalLink } from 'lucide-react';
+import { Lock, Unlock } from 'lucide-react';
 import { formatProgressLabel, getBookProgress } from '../../lib/bookProgress';
+
+declare global {
+  interface Window {
+    PaystackPop?: {
+      setup: (opts: Record<string, unknown>) => { openIframe: () => void };
+    };
+  }
+}
 
 interface LibraryDoc {
   id: string;
@@ -41,10 +50,13 @@ const DoctorLibraryPage: React.FC = () => {
   >([]);
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [payingBookId, setPayingBookId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', author: '', category: '', description: '', price: '0' });
   const [file, setFile] = useState<File | null>(null);
   const [readerBook, setReaderBook] = useState<LibraryDoc | null>(null);
   const [progressTick, setProgressTick] = useState(0);
+  const [purchasedBookIds, setPurchasedBookIds] = useState<Set<string>>(new Set());
+  const [paystackPublicKey, setPaystackPublicKey] = useState('');
 
   const bumpProgress = useCallback(() => setProgressTick((t) => t + 1), []);
 
@@ -84,6 +96,57 @@ const DoctorLibraryPage: React.FC = () => {
     return () => unsub();
   }, [currentDoctor?.uid]);
 
+  React.useEffect(() => {
+    if (!currentDoctor?.uid) {
+      setPurchasedBookIds(new Set());
+      return;
+    }
+    const pq = query(collection(db, 'libraryPurchases'), where('buyerId', '==', currentDoctor.uid), limit(200));
+    const unsub = onSnapshot(
+      pq,
+      (snap) => {
+        const ids = new Set<string>();
+        snap.docs.forEach((d) => {
+          const x = d.data() as Record<string, unknown>;
+          if (x.status === 'success' && typeof x.bookId === 'string') ids.add(x.bookId);
+        });
+        setPurchasedBookIds(ids);
+      },
+      () => setPurchasedBookIds(new Set())
+    );
+    return () => unsub();
+  }, [currentDoctor?.uid]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (!(await isSupported())) return;
+        const rc = getRemoteConfig(app);
+        rc.settings = { minimumFetchIntervalMillis: 60_000 };
+        rc.defaultConfig = { paystack_public_key: '' };
+        await fetchAndActivate(rc);
+        const remoteKey = getValue(rc, 'paystack_public_key').asString().trim();
+        if (mounted) setPaystackPublicKey(remoteKey);
+      } catch (err) {
+        console.error('Remote Config key load failed:', err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   const filtered = items.filter((p) => {
     const q = search.toLowerCase();
     return (
@@ -95,13 +158,109 @@ const DoctorLibraryPage: React.FC = () => {
 
   const myUploads = items.filter((p) => p.uploadedBy === currentDoctor?.uid);
 
+  const canAccessBook = useCallback(
+    (b: LibraryDoc) => {
+      const price = Number(b.price || 0);
+      return price <= 0 || b.uploadedBy === currentDoctor?.uid || purchasedBookIds.has(b.id);
+    },
+    [currentDoctor?.uid, purchasedBookIds]
+  );
+
+  const recordPurchase = async (b: LibraryDoc, reference: string) => {
+    if (!currentDoctor?.uid) return;
+    await addDoc(collection(db, 'libraryPurchases'), {
+      bookId: b.id,
+      bookTitle: b.title || '',
+      amount: Number(b.price || 0),
+      buyerId: currentDoctor.uid,
+      buyerEmail: `${currentDoctor.uid}@lawhubb.local`,
+      sellerId: b.uploadedBy || '',
+      paystackReference: reference,
+      provider: 'paystack',
+      status: 'success',
+      createdAt: serverTimestamp(),
+      payoutNumber: '+233558466487',
+    });
+  };
+
+  const beginPaystackPayment = (b: LibraryDoc) => {
+    if (!paystackPublicKey) {
+      toast.error('Paystack key missing in Remote Config (paystack_public_key).');
+      return;
+    }
+    if (!window.PaystackPop?.setup) {
+      toast.error('Paystack is still loading. Try again in a moment.');
+      return;
+    }
+    if (!currentDoctor?.uid) {
+      toast.error('Please sign in again.');
+      return;
+    }
+    const amount = Number(b.price || 0);
+    if (!(amount > 0)) {
+      openReader(b);
+      return;
+    }
+    setPayingBookId(b.id);
+    const buyerEmail = auth.currentUser?.email?.trim() || '';
+    if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
+      setPayingBookId(null);
+      toast.error('Your account needs a valid email before payment can continue.');
+      return;
+    }
+    const handleSuccess = (response: { reference?: string }) => {
+      void (async () => {
+        try {
+          await recordPurchase(b, response?.reference || '');
+          setPurchasedBookIds((prev) => new Set(prev).add(b.id));
+          toast.success('Payment successful. You can now read this book.');
+          openReader(b);
+        } catch (err) {
+          console.error(err);
+          toast.error('Payment succeeded but purchase record failed.');
+        } finally {
+          setPayingBookId(null);
+        }
+      })();
+    };
+    const handleClose = () => {
+      setPayingBookId(null);
+      toast('Payment cancelled.');
+    };
+    const handler = window.PaystackPop.setup({
+      key: paystackPublicKey,
+      email: buyerEmail,
+      amount: Math.round(amount * 100),
+      currency: 'GHS',
+      channels: ['mobile_money'],
+      metadata: {
+        custom_fields: [
+          { display_name: 'Book title', variable_name: 'book_title', value: b.title || '' },
+          { display_name: 'Receiver', variable_name: 'receiver', value: '+233558466487' },
+        ],
+      },
+      callback: handleSuccess,
+      onClose: handleClose,
+    });
+    handler.openIframe();
+  };
+
   const openReader = (b: LibraryDoc) => {
     if (!b.url) {
       toast.error('This book has no file attached.');
       return;
     }
+    if (!canAccessBook(b)) {
+      beginPaystackPayment(b);
+      return;
+    }
     setReaderBook(b);
   };
+
+  const lockedCount = useMemo(
+    () => filtered.filter((b) => !canAccessBook(b) && Number(b.price || 0) > 0).length,
+    [filtered, canAccessBook]
+  );
 
   const progressFor = (bookId: string): string => {
     void progressTick;
@@ -113,6 +272,11 @@ const DoctorLibraryPage: React.FC = () => {
     e.preventDefault();
     if (!currentDoctor?.uid || !file || !form.title.trim()) {
       toast.error('Choose a file and title.');
+      return;
+    }
+    const numericPrice = Number(form.price || '0');
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+      toast.error('Price must be 0 or more.');
       return;
     }
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -132,7 +296,7 @@ const DoctorLibraryPage: React.FC = () => {
         author: form.author.trim(),
         category: form.category.trim(),
         description: form.description.trim(),
-        price: parseFloat(form.price) || 0,
+        price: numericPrice,
         url,
         fileType: ext,
         timestamp: serverTimestamp(),
@@ -227,17 +391,6 @@ const DoctorLibraryPage: React.FC = () => {
                     {prog ? <p className="mt-0.5 text-xs text-slate-500">{prog}</p> : null}
                   </div>
                   <span className="text-slate-500">₵{(b.price ?? 0).toFixed(2)}</span>
-                  {b.url && (
-                    <a
-                      href={b.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-teal-700 hover:underline"
-                      title="Open in new tab"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
                 </li>
               );
               })}
@@ -284,7 +437,10 @@ const DoctorLibraryPage: React.FC = () => {
               className="max-w-xs bg-white"
             />
           </div>
-          <p className="mt-2 text-sm text-slate-500">Tap a title to read. Your place is saved automatically for PDFs.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Tap a title to read in-app. Free books open immediately; paid books require Paystack payment first. {lockedCount} locked
+            book(s).
+          </p>
           <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-700">
@@ -293,8 +449,8 @@ const DoctorLibraryPage: React.FC = () => {
                   <th className="px-3 py-2">Author</th>
                   <th className="px-3 py-2">Category</th>
                   <th className="px-3 py-2">Price</th>
+                  <th className="px-3 py-2">Access</th>
                   <th className="px-3 py-2">Progress</th>
-                  <th className="px-3 py-2 w-10" aria-label="Open in new tab" />
                 </tr>
               </thead>
               <tbody>
@@ -316,22 +472,25 @@ const DoctorLibraryPage: React.FC = () => {
                     <td className="px-3 py-2 text-slate-600">{b.author || '—'}</td>
                     <td className="px-3 py-2 text-slate-600">{b.category || '—'}</td>
                     <td className="px-3 py-2">₵{(b.price ?? 0).toFixed(2)}</td>
-                    <td className="px-3 py-2 text-slate-600">{progressFor(b.id) || '—'}</td>
                     <td className="px-3 py-2">
-                      {b.url ? (
-                        <a
-                          href={b.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex text-teal-700 hover:text-teal-900"
-                          title="New tab"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
+                      {canAccessBook(b) ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
+                          <Unlock className="h-3.5 w-3.5" />
+                          Open
+                        </span>
                       ) : (
-                        '—'
+                        <button
+                          type="button"
+                          disabled={payingBookId === b.id}
+                          onClick={() => beginPaystackPayment(b)}
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          {payingBookId === b.id ? 'Paying...' : 'Pay to unlock'}
+                        </button>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-slate-600">{progressFor(b.id) || '—'}</td>
                   </tr>
                 ))}
               </tbody>

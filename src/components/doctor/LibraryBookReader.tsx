@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import { ref, getBytes } from 'firebase/storage';
-import { X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { getBytes, getDownloadURL, ref } from 'firebase/storage';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../ui/Button';
 import { getBookProgress, setBookProgress, type BookProgress } from '../../lib/bookProgress';
 import { storage } from '../../firebase';
@@ -41,6 +41,12 @@ function isFirebaseStorageDownloadUrl(u: string): boolean {
   return u.includes('firebasestorage.googleapis.com') || u.includes('storage.googleapis.com');
 }
 
+/** URLs saved without `token=` still need a signed URL for browser/SDK GET; refresh via getDownloadURL. */
+async function resolveReadableStorageUrl(raw: string): Promise<string> {
+  const r = ref(storage, raw);
+  return getDownloadURL(r);
+}
+
 const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onClose, onProgressSaved }) => {
   const url = book.url || '';
   const pdf = isPdfBook(book);
@@ -57,12 +63,18 @@ const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onC
   /** In-memory PDF for Firebase URLs (avoids browser CORS on storage.googleapis.com). */
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  /** Tokenized URL for Word embed (Office Online cannot use Storage auth headers). */
+  const [wordEmbedUrl, setWordEmbedUrl] = useState<string | null>(null);
+  const [wordEmbedLoading, setWordEmbedLoading] = useState(false);
+  const [wordEmbedError, setWordEmbedError] = useState<string | null>(null);
 
   useEffect(() => {
     setPdfBytes(null);
     setPdfError(null);
     setNumPages(0);
     setPageNumber(1);
+    setWordEmbedUrl(null);
+    setWordEmbedError(null);
   }, [book.id, url]);
 
   useEffect(() => {
@@ -76,7 +88,8 @@ const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onC
     setPdfError(null);
     (async () => {
       try {
-        const storageRef = ref(storage, url);
+        const readableUrl = await resolveReadableStorageUrl(url);
+        const storageRef = ref(storage, readableUrl);
         const buf = await getBytes(storageRef);
         if (cancelled) return;
         setPdfBytes(new Uint8Array(buf));
@@ -92,6 +105,34 @@ const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onC
       cancelled = true;
     };
   }, [pdf, url, book.id]);
+
+  useEffect(() => {
+    if (!word || !url) return;
+    if (!isFirebaseStorageDownloadUrl(url)) {
+      setWordEmbedUrl(url);
+      setWordEmbedLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setWordEmbedLoading(true);
+    setWordEmbedError(null);
+    setWordEmbedUrl(null);
+    (async () => {
+      try {
+        const readable = await resolveReadableStorageUrl(url);
+        if (!cancelled) setWordEmbedUrl(readable);
+      } catch (e) {
+        if (!cancelled) {
+          setWordEmbedError(e instanceof Error ? e.message : 'Could not open this document.');
+        }
+      } finally {
+        if (!cancelled) setWordEmbedLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [word, url, book.id]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -130,8 +171,8 @@ const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onC
   const goNext = () => setPageNumber((p) => Math.min(numPages || 1, p + 1));
 
   const officeEmbed =
-    word && url
-      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
+    word && wordEmbedUrl
+      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(wordEmbedUrl)}`
       : null;
 
   return (
@@ -168,18 +209,6 @@ const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onC
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-          )}
-
-          {url && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
-            >
-              <ExternalLink className="h-4 w-4" />
-              New tab
-            </a>
           )}
 
           <button
@@ -237,16 +266,24 @@ const LibraryBookReader: React.FC<LibraryBookReaderProps> = ({ book, userId, onC
             </div>
           )}
 
-          {word && officeEmbed && (
+          {word && wordEmbedError && (
+            <div className="m-auto max-w-md p-10 text-center text-slate-700">
+              <p>{wordEmbedError}</p>
+              <Button type="button" className="mt-4" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          )}
+          {word && wordEmbedLoading && !wordEmbedError && (
+            <div className="flex justify-center py-24 text-slate-500">Opening document…</div>
+          )}
+          {word && officeEmbed && !wordEmbedLoading && !wordEmbedError && (
             <iframe title={book.title || 'Document'} src={officeEmbed} className="h-[min(75vh,720px)] w-full border-0" />
           )}
 
           {!pdf && !word && url && (
             <div className="flex flex-col items-center justify-center gap-4 p-10 text-center">
-              <p className="text-slate-600">This file type opens best in another app.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="font-medium text-teal-700 underline">
-                Open file
-              </a>
+              <p className="text-slate-600">This file type is not previewable in-app yet.</p>
             </div>
           )}
         </div>

@@ -25,6 +25,7 @@ import DoctorReferralsPage from './pages/doctor/DoctorReferralsPage';
 import DoctorNewReferralPage from './pages/doctor/DoctorNewReferralPage';
 import DoctorLibraryPage from './pages/doctor/DoctorLibraryPage';
 import DoctorVideoConsultationsPage from './pages/doctor/DoctorVideoConsultationsPage';
+import DoctorLawInsightsPage from './pages/doctor/DoctorLawInsightsPage';
 // import ShiftSchedulePage from './pages/ShiftSchedulePage';
 
 /** Chamber administrators and super admin */
@@ -167,6 +168,14 @@ const App: React.FC = () => {
               element={
                 <DoctorProtectedRoute>
                   <DoctorLibraryPage />
+                </DoctorProtectedRoute>
+              }
+            />
+            <Route
+              path="/doctor/insights"
+              element={
+                <DoctorProtectedRoute>
+                  <DoctorLawInsightsPage />
                 </DoctorProtectedRoute>
               }
             />

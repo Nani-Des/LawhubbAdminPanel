@@ -43,7 +43,7 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 px-4 py-10">
       <div className="w-full max-w-lg space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">LawHubb</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Law Hubb</h1>
           <p className="mt-1 text-slate-600">Choose how you want to sign in</p>
         </div>
 
