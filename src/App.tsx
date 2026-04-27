@@ -36,7 +36,7 @@ const AdminProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children
     return <Navigate to="/login" replace />;
   }
   if (currentDoctor && !currentAdmin) {
-    return <Navigate to="/doctor" replace />;
+    return <Navigate to="/lawyer" replace />;
   }
   if (!currentAdmin) {
     return <Navigate to="/login" replace />;
@@ -45,7 +45,7 @@ const AdminProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children
   return <>{children}</>;
 };
 
-/** Chamber members (Users.Role === true) — separate workspace; routes under /doctor are legacy paths */
+/** Chamber members (Users.Role === true) — separate workspace under /lawyer */
 const DoctorProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, currentAdmin, currentDoctor } = useAuth();
 
@@ -105,7 +105,7 @@ const PermissionProtectedRoute: React.FC<{
     return <Navigate to="/login" replace />;
   }
   if (currentDoctor && !currentAdmin) {
-    return <Navigate to="/doctor" replace />;
+    return <Navigate to="/lawyer" replace />;
   }
   
   // For main_admin, require chamber selection
@@ -140,7 +140,7 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
-              path="/doctor"
+              path="/lawyer"
               element={
                 <DoctorProtectedRoute>
                   <DoctorDashboardPage />
@@ -148,7 +148,7 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/doctor/referrals"
+              path="/lawyer/referrals"
               element={
                 <DoctorProtectedRoute>
                   <DoctorReferralsPage />
@@ -156,7 +156,7 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/doctor/referrals/new"
+              path="/lawyer/referrals/new"
               element={
                 <DoctorProtectedRoute>
                   <DoctorNewReferralPage />
@@ -164,7 +164,7 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/doctor/library"
+              path="/lawyer/library"
               element={
                 <DoctorProtectedRoute>
                   <DoctorLibraryPage />
@@ -172,7 +172,7 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/doctor/insights"
+              path="/lawyer/insights"
               element={
                 <DoctorProtectedRoute>
                   <DoctorLawInsightsPage />
@@ -180,14 +180,21 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/doctor/chats"
+              path="/lawyer/chats"
               element={
                 <DoctorProtectedRoute>
                   <DoctorVideoConsultationsPage />
                 </DoctorProtectedRoute>
               }
             />
-            <Route path="/doctor/consultations" element={<Navigate to="/doctor/chats" replace />} />
+            <Route path="/lawyer/consultations" element={<Navigate to="/lawyer/chats" replace />} />
+            <Route path="/doctor" element={<Navigate to="/lawyer" replace />} />
+            <Route path="/doctor/referrals" element={<Navigate to="/lawyer/referrals" replace />} />
+            <Route path="/doctor/referrals/new" element={<Navigate to="/lawyer/referrals/new" replace />} />
+            <Route path="/doctor/library" element={<Navigate to="/lawyer/library" replace />} />
+            <Route path="/doctor/insights" element={<Navigate to="/lawyer/insights" replace />} />
+            <Route path="/doctor/chats" element={<Navigate to="/lawyer/chats" replace />} />
+            <Route path="/doctor/consultations" element={<Navigate to="/lawyer/chats" replace />} />
             <Route 
               path="/select-chamber" 
               element={

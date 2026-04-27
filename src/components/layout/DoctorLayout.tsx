@@ -34,15 +34,15 @@ const DoctorLayout: React.FC<DoctorLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems: NavItem[] = [
-    { label: 'Home', path: '/doctor', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { label: 'Incoming referrals', path: '/doctor/referrals', icon: <RefreshCw className="w-5 h-5" /> },
-    { label: 'New referral', path: '/doctor/referrals/new', icon: <PlusCircle className="w-5 h-5" /> },
-    { label: 'Library', path: '/doctor/library', icon: <BookOpen className="w-5 h-5" /> },
-    { label: 'Law insights', path: '/doctor/insights', icon: <Lightbulb className="w-5 h-5" /> },
+    { label: 'Home', path: '/lawyer', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { label: 'Incoming referrals', path: '/lawyer/referrals', icon: <RefreshCw className="w-5 h-5" /> },
+    { label: 'New referral', path: '/lawyer/referrals/new', icon: <PlusCircle className="w-5 h-5" /> },
+    { label: 'Library', path: '/lawyer/library', icon: <BookOpen className="w-5 h-5" /> },
+    { label: 'Law insights', path: '/lawyer/insights', icon: <Lightbulb className="w-5 h-5" /> },
     {
       label: 'Messages & video',
-      path: '/doctor/chats',
-      matchPrefix: '/doctor/chats',
+      path: '/lawyer/chats',
+      matchPrefix: '/lawyer/chats',
       icon: <MessagesSquare className="w-5 h-5" />,
     },
   ];

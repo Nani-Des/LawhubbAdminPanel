@@ -17,7 +17,7 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (currentDoctor) navigate('/doctor', { replace: true });
+    if (currentDoctor) navigate('/lawyer', { replace: true });
     else if (currentAdmin) navigate('/', { replace: true });
   }, [isAuthenticated, currentAdmin, currentDoctor, navigate]);
 
@@ -29,7 +29,7 @@ const LoginPage: React.FC = () => {
     setIsLoading(false);
 
     if (success) {
-      navigate(portal === 'doctor' ? '/doctor' : '/');
+      navigate(portal === 'doctor' ? '/lawyer' : '/');
     } else {
       toast.error(
         portal === 'doctor'

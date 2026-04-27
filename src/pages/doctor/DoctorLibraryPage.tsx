@@ -3,10 +3,11 @@ import DoctorLayout from '../../components/layout/DoctorLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import LibraryBookReader from '../../components/doctor/LibraryBookReader';
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   onSnapshot,
   orderBy,
   query,
@@ -15,7 +16,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { fetchAndActivate, getRemoteConfig, getValue, isSupported } from 'firebase/remote-config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { app, auth, db, storage } from '../../firebase';
 import toast from 'react-hot-toast';
 import { Lock, Unlock } from 'lucide-react';
@@ -40,6 +41,7 @@ interface LibraryDoc {
   fileType?: string;
   timestamp?: { seconds: number };
   uploadedBy?: string;
+  sellerId?: string;
 }
 
 const DoctorLibraryPage: React.FC = () => {
@@ -53,12 +55,8 @@ const DoctorLibraryPage: React.FC = () => {
   const [payingBookId, setPayingBookId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', author: '', category: '', description: '', price: '0' });
   const [file, setFile] = useState<File | null>(null);
-  const [readerBook, setReaderBook] = useState<LibraryDoc | null>(null);
-  const [progressTick, setProgressTick] = useState(0);
   const [purchasedBookIds, setPurchasedBookIds] = useState<Set<string>>(new Set());
   const [paystackPublicKey, setPaystackPublicKey] = useState('');
-
-  const bumpProgress = useCallback(() => setProgressTick((t) => t + 1), []);
 
   React.useEffect(() => {
     const q = query(collection(db, 'library'), orderBy('timestamp', 'desc'));
@@ -161,7 +159,8 @@ const DoctorLibraryPage: React.FC = () => {
   const canAccessBook = useCallback(
     (b: LibraryDoc) => {
       const price = Number(b.price || 0);
-      return price <= 0 || b.uploadedBy === currentDoctor?.uid || purchasedBookIds.has(b.id);
+      const ownerId = b.uploadedBy || b.sellerId;
+      return price <= 0 || ownerId === currentDoctor?.uid || purchasedBookIds.has(b.id);
     },
     [currentDoctor?.uid, purchasedBookIds]
   );
@@ -178,9 +177,37 @@ const DoctorLibraryPage: React.FC = () => {
       paystackReference: reference,
       provider: 'paystack',
       status: 'success',
+      isPaid: true,
+      paymentStatus: 'paid',
       createdAt: serverTimestamp(),
       payoutNumber: '+233558466487',
     });
+  };
+
+  const deleteBook = async (b: LibraryDoc) => {
+    if (!currentDoctor?.uid) return;
+    const ownerId = b.uploadedBy || b.sellerId;
+    if (ownerId !== currentDoctor.uid) {
+      toast.error('You can only delete books you uploaded.');
+      return;
+    }
+    if (!window.confirm(`Delete "${b.title || 'this book'}"?`)) return;
+
+    try {
+      if (b.url) {
+        await deleteObject(ref(storage, b.url));
+      }
+    } catch (err) {
+      console.warn('Storage delete failed; continuing with firestore delete', err);
+    }
+
+    try {
+      await deleteDoc(doc(db, 'library', b.id));
+      toast.success('Book deleted.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not delete this book.');
+    }
   };
 
   const beginPaystackPayment = (b: LibraryDoc) => {
@@ -214,7 +241,7 @@ const DoctorLibraryPage: React.FC = () => {
           await recordPurchase(b, response?.reference || '');
           setPurchasedBookIds((prev) => new Set(prev).add(b.id));
           toast.success('Payment successful. You can now read this book.');
-          openReader(b);
+          void openReader(b);
         } catch (err) {
           console.error(err);
           toast.error('Payment succeeded but purchase record failed.');
@@ -254,7 +281,7 @@ const DoctorLibraryPage: React.FC = () => {
       beginPaystackPayment(b);
       return;
     }
-    setReaderBook(b);
+    window.open(b.url, '_blank', 'noopener,noreferrer');
   };
 
   const lockedCount = useMemo(
@@ -263,7 +290,6 @@ const DoctorLibraryPage: React.FC = () => {
   );
 
   const progressFor = (bookId: string): string => {
-    void progressTick;
     if (!currentDoctor?.uid) return '';
     return formatProgressLabel(getBookProgress(currentDoctor.uid, bookId));
   };
@@ -301,6 +327,7 @@ const DoctorLibraryPage: React.FC = () => {
         fileType: ext,
         timestamp: serverTimestamp(),
         uploadedBy: currentDoctor.uid,
+        sellerId: currentDoctor.uid,
       });
       toast.success('Book uploaded.');
       setForm({ title: '', author: '', category: '', description: '', price: '0' });
@@ -390,7 +417,16 @@ const DoctorLibraryPage: React.FC = () => {
                     )}
                     {prog ? <p className="mt-0.5 text-xs text-slate-500">{prog}</p> : null}
                   </div>
-                  <span className="text-slate-500">₵{(b.price ?? 0).toFixed(2)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-500">₵{(b.price ?? 0).toFixed(2)}</span>
+                    <button
+                      type="button"
+                      onClick={() => void deleteBook(b)}
+                      className="rounded-md border border-rose-200 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               );
               })}
@@ -438,8 +474,8 @@ const DoctorLibraryPage: React.FC = () => {
             />
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            Tap a title to read in-app. Free books open immediately; paid books require Paystack payment first. {lockedCount} locked
-            book(s).
+            Tap a title to open in a new browser tab. Free books open immediately; paid books require Paystack payment
+            first. {lockedCount} locked book(s).
           </p>
           <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-left text-sm">
@@ -499,17 +535,6 @@ const DoctorLibraryPage: React.FC = () => {
         </div>
       </div>
 
-      {readerBook && currentDoctor?.uid && (
-        <LibraryBookReader
-          book={readerBook}
-          userId={currentDoctor.uid}
-          onClose={() => {
-            setReaderBook(null);
-            bumpProgress();
-          }}
-          onProgressSaved={bumpProgress}
-        />
-      )}
     </DoctorLayout>
   );
 };

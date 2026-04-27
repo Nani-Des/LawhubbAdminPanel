@@ -49,7 +49,7 @@ const DoctorDashboardPage: React.FC = () => {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Link
-            to="/doctor/referrals"
+            to="/lawyer/referrals"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
           >
             <RefreshCw className="h-8 w-8 text-teal-600" />
@@ -60,7 +60,7 @@ const DoctorDashboardPage: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">For your chamber</p>
           </Link>
           <Link
-            to="/doctor/library"
+            to="/lawyer/library"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
           >
             <BookOpen className="h-8 w-8 text-teal-600" />
@@ -68,7 +68,7 @@ const DoctorDashboardPage: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">Browse, read, and upload books</p>
           </Link>
           <Link
-            to="/doctor/chats"
+            to="/lawyer/chats"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
           >
             <MessagesSquare className="h-8 w-8 text-teal-600" />
@@ -76,7 +76,7 @@ const DoctorDashboardPage: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">Message clients and start video calls</p>
           </Link>
           <Link
-            to="/doctor/insights"
+            to="/lawyer/insights"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
           >
             <Lightbulb className="h-8 w-8 text-teal-600" />
