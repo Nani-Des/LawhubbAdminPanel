@@ -364,17 +364,22 @@ const DoctorLibraryPage: React.FC = () => {
               onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
             />
             <Input
-              placeholder="Category"
+              placeholder="Law category (e.g., Criminal Law, Civil Law, Corporate Law)"
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
             />
-            <Input
-              placeholder="Price"
-              type="number"
-              step="0.01"
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-            />
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                Book price (GHS)
+              </label>
+              <Input
+                placeholder="Enter amount to charge (use 0 for free)"
+                type="number"
+                step="0.01"
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              />
+            </div>
             <div className="sm:col-span-2">
               <textarea
                 placeholder="Description"
