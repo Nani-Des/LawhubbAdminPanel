@@ -128,6 +128,19 @@ const LoginPage: React.FC = () => {
               {portal === 'admin' ? 'Sign in to admin panel' : 'Sign in to member workspace'}
             </Button>
           </form>
+          <div className="mt-6 rounded-xl border border-teal-200 bg-teal-50/60 p-4">
+            <p className="text-sm font-medium text-slate-800">New here?</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Register as a lawyer to begin verification and get access after super-admin approval.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/lawyer-signup')}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
+            >
+              Register as a lawyer
+            </button>
+          </div>
         </div>
       </div>
     </div>

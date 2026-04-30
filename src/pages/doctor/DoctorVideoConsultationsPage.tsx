@@ -128,6 +128,12 @@ const DoctorVideoConsultationsPage: React.FC = () => {
     return () => unsub();
   }, [selected?.otherId]);
 
+  const chattedUserIds = useMemo(() => new Set(chats.map((c) => c.otherId)), [chats]);
+  const visibleChats = useMemo(
+    () => chats.filter((row) => !!row.lastMessage && row.lastMessage.trim().length > 0),
+    [chats]
+  );
+
   const loadPatients = useCallback(async () => {
     if (!doctorUid) return;
     setPatientsLoading(true);
@@ -150,13 +156,14 @@ const DoctorVideoConsultationsPage: React.FC = () => {
 
   const filteredPatients = useMemo(() => {
     const q = nameQuery.trim().toLowerCase();
-    if (q.length < 1) return patients.slice(0, 50);
+    if (q.length < 1) return [];
     return patients.filter((p) => {
+      if (chattedUserIds.has(p.id)) return false;
       const name = fullName(p).toLowerCase();
       const em = (p.Email || '').toLowerCase();
       return name.includes(q) || em.includes(q);
     });
-  }, [patients, nameQuery]);
+  }, [patients, nameQuery, chattedUserIds]);
 
   const openOrCreateChat = async (patientId: string, patientName: string, pic?: string) => {
     if (!doctorUid) return;
@@ -240,20 +247,20 @@ const DoctorVideoConsultationsPage: React.FC = () => {
                 <span className="font-semibold">Conversations</span>
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                {chats.length} conversation{chats.length !== 1 ? 's' : ''}
+                {visibleChats.length} conversation{visibleChats.length !== 1 ? 's' : ''}
               </p>
             </div>
 
             <div className="max-h-[42vh] flex-1 overflow-y-auto lg:max-h-none">
-              {!doctorUid ? null : chats.length === 0 ? (
+              {!doctorUid ? null : visibleChats.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
                   <Users className="h-10 w-10 text-slate-300" />
                   <p className="text-sm font-medium text-slate-700">No chats yet</p>
-                  <p className="text-xs text-slate-500">Find a client below to message or video call.</p>
+                  <p className="text-xs text-slate-500">Use search below to start a new conversation.</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {chats.map((row) => {
+                  {visibleChats.map((row) => {
                     const activeSel = selected?.chatId === row.chatId;
                     return (
                       <li key={row.chatId}>
@@ -304,7 +311,7 @@ const DoctorVideoConsultationsPage: React.FC = () => {
                 <Search className="h-4 w-4 text-teal-600" />
                 <span className="text-sm font-semibold">New message</span>
               </div>
-              <p className="mt-1 text-xs text-slate-500">Start a new chat by choosing someone below.</p>
+              <p className="mt-1 text-xs text-slate-500">Search to find contacts you have not chatted with yet.</p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Button type="button" size="sm" onClick={loadPatients} isLoading={patientsLoading} disabled={!doctorUid}>
                   Load people
@@ -318,7 +325,9 @@ const DoctorVideoConsultationsPage: React.FC = () => {
               </div>
               <ul className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white">
                 {filteredPatients.length === 0 ? (
-                  <li className="px-3 py-6 text-center text-xs text-slate-500">No matches</li>
+                  <li className="px-3 py-6 text-center text-xs text-slate-500">
+                    {nameQuery.trim().length === 0 ? 'Type a name or email to search contacts' : 'No matches'}
+                  </li>
                 ) : (
                   filteredPatients.map((p) => (
                     <li key={p.id}>

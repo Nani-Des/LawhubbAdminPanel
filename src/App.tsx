@@ -26,6 +26,8 @@ import DoctorNewReferralPage from './pages/doctor/DoctorNewReferralPage';
 import DoctorLibraryPage from './pages/doctor/DoctorLibraryPage';
 import DoctorVideoConsultationsPage from './pages/doctor/DoctorVideoConsultationsPage';
 import DoctorLawInsightsPage from './pages/doctor/DoctorLawInsightsPage';
+import LawyerSignupPage from './pages/LawyerSignupPage';
+import LawyerVerificationsPage from './pages/LawyerVerificationsPage';
 // import ShiftSchedulePage from './pages/ShiftSchedulePage';
 
 /** Chamber administrators and super admin */
@@ -63,6 +65,22 @@ const DoctorProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childre
 };
 
 const ProtectedRoute = AdminProtectedRoute;
+
+const MainAdminOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, currentAdmin, currentDoctor } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (currentDoctor && !currentAdmin) {
+    return <Navigate to="/lawyer" replace />;
+  }
+  if (!currentAdmin || currentAdmin.baseRole !== 'main_admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
 
 // Component to handle main_admin routing
 const MainAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -117,6 +135,14 @@ const PermissionProtectedRoute: React.FC<{
   if (permission === 'dashboard') {
     return <>{children}</>;
   }
+
+  // Reports are restricted to super admins only.
+  if (permission === 'reports') {
+    if (currentAdmin?.baseRole !== 'main_admin') {
+      return <Navigate to="/" replace />;
+    }
+    return <>{children}</>;
+  }
   
   // main_admin has access to everything (if hospital is selected)
   if (currentAdmin?.baseRole === 'main_admin') {
@@ -139,6 +165,7 @@ const App: React.FC = () => {
                 <Toaster position="top-center" reverseOrder={false} />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/lawyer-signup" element={<LawyerSignupPage />} />
             <Route
               path="/lawyer"
               element={
@@ -300,6 +327,14 @@ const App: React.FC = () => {
                   <ReportsPage />
                 </PermissionProtectedRoute>
               } 
+            />
+            <Route
+              path="/lawyer-verifications"
+              element={
+                <MainAdminOnlyRoute>
+                  <LawyerVerificationsPage />
+                </MainAdminOnlyRoute>
+              }
             />
             <Route 
               path="/settings" 

@@ -352,7 +352,7 @@ const DashboardPage: React.FC = () => {
                     path="/services"
                   />
                 )}
-                {hasPermission('reports') && (
+                {currentAdmin?.baseRole === 'main_admin' && (
                   <ActionCard
                     title="Generate Reports"
                     description="Generate comprehensive reports on staff and clients"

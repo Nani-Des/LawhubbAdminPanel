@@ -15,7 +15,8 @@ import {
   Upload,
   Bell,
   Building2,
-  FileBarChart
+  FileBarChart,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChamber } from '../../contexts/ChamberContext';
@@ -132,6 +133,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { label: 'Services', path: '/services', icon: <FilePlus2 className="w-5 h-5" />, permission: 'services' },
     { label: 'Referrals', path: '/referrals', icon: <RefreshCw className="w-5 h-5" />, permission: 'referrals' },
     { label: 'Reports', path: '/reports', icon: <FileBarChart className="w-5 h-5" />, permission: 'reports' },
+    { label: 'Lawyer Verifications', path: '/lawyer-verifications', icon: <ShieldCheck className="w-5 h-5" />, permission: 'lawyer_verifications' },
     { label: 'Notifications', path: '/notifications', icon: <Bell className="w-5 h-5" />, permission: 'notifications', badge: unreadNotifications },
   ];
 
@@ -144,6 +146,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems = allNavItems.filter(item => {
     if (isMainAdminSelectingChamber || isMainAdminWithoutChamber) return false;
     if (item.path === '/') return true; // Dashboard is always accessible
+    if (item.path === '/reports') return currentAdmin?.baseRole === 'main_admin';
+    if (item.path === '/lawyer-verifications') return currentAdmin?.baseRole === 'main_admin';
     // main_admin has access to all pages after selecting a chamber
     if (currentAdmin?.baseRole === 'main_admin') return true;
     return hasPermission(item.permission);
