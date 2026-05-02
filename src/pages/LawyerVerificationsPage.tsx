@@ -1,12 +1,29 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/layout/Layout';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import {
+  collection,
+  doc,
+  documentId,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
+import { db, storage } from '../firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import toast from 'react-hot-toast';
 import { BadgeCheck, FileCheck2, XCircle } from 'lucide-react';
+import { Chamber, Practice } from '../types';
 
 type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -31,13 +48,86 @@ interface VerificationRequest {
   rejectionReason?: string;
 }
 
+const TITLE_OPTIONS = ['Select a title', 'Esq.', 'Mr.', 'Mrs.', 'Miss.', 'Dr.'];
+const REGION_OPTIONS = [
+  'Select a region',
+  'Western North',
+  'Western',
+  'Oti',
+  'Bono',
+  'Bono East',
+  'Ahafo',
+  'Greater Accra',
+  'Eastern',
+  'Central',
+  'Northern',
+  'Savannah',
+  'North East',
+  'Volta',
+  'Upper East',
+  'Upper West',
+  'Ashanti',
+];
+
+interface ApprovalFields {
+  chamberId: string;
+  practiceId: string;
+  title: string;
+  region: string;
+}
+
+async function fetchPracticesForChamber(chamberId: string): Promise<Practice[]> {
+  const chamberSnap = await getDoc(doc(db, 'Chamber', chamberId));
+  if (!chamberSnap.exists()) return [];
+  const data = chamberSnap.data() as Chamber;
+  const ids = ((data['Chamber Practice'] || []) as unknown[]).filter((id): id is string => typeof id === 'string');
+  if (!ids.length) return [];
+  const practices: Practice[] = [];
+  for (let i = 0; i < ids.length; i += 10) {
+    const chunk = ids.slice(i, i + 10);
+    const q = query(collection(db, 'Practice'), where(documentId(), 'in', chunk));
+    const snap = await getDocs(q);
+    snap.forEach((d) => {
+      practices.push({
+        id: d.id,
+        'Practice ID': d.id,
+        'Practice Name': (d.data()['Practice Name'] as string) || '',
+      });
+    });
+  }
+  return practices;
+}
+
+async function uploadApprovalProfileImage(
+  chamberId: string,
+  uid: string,
+  file: File
+): Promise<string | null> {
+  try {
+    const timestamp = Date.now();
+    const safeName = file.name.replace(/\s+/g, '_');
+    const storageRef = ref(storage, `${chamberId}/lawyers/${uid}/profile_${timestamp}_${safeName}`);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+  } catch (err) {
+    console.error('Profile image upload failed:', err);
+    return null;
+  }
+}
+
 const LawyerVerificationsPage: React.FC = () => {
   const { currentAdmin } = useAuth();
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
+  const [chambers, setChambers] = useState<Chamber[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | VerificationStatus>('pending');
   const [queryText, setQueryText] = useState('');
   const [busyUid, setBusyUid] = useState<string | null>(null);
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
+  const [approvalFields, setApprovalFields] = useState<Record<string, ApprovalFields>>({});
+  const [practiceOptionsByUid, setPracticeOptionsByUid] = useState<Record<string, Practice[]>>({});
+  const [loadingPracticesForUid, setLoadingPracticesForUid] = useState<Record<string, boolean>>({});
+  const [approvalImageFiles, setApprovalImageFiles] = useState<Record<string, File | null>>({});
+  const [approvalImagePreview, setApprovalImagePreview] = useState<Record<string, string | null>>({});
 
   React.useEffect(() => {
     const q = query(collection(db, 'LawyerVerificationRequests'), orderBy('createdAt', 'desc'));
@@ -56,6 +146,39 @@ const LawyerVerificationsPage: React.FC = () => {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'Chamber'),
+      (snapshot) => {
+        setChambers(
+          snapshot.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          })) as Chamber[]
+        );
+      },
+      (err) => console.error('Chamber list fetch error:', err)
+    );
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    setApprovalFields((prev) => {
+      const next = { ...prev };
+      for (const r of requests) {
+        if (r.status === 'pending' && !next[r.uid]) {
+          next[r.uid] = {
+            chamberId: '',
+            practiceId: '',
+            title: 'Select a title',
+            region: 'Select a region',
+          };
+        }
+      }
+      return next;
+    });
+  }, [requests]);
+
   const filtered = useMemo(() => {
     return requests.filter((r) => {
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
@@ -66,6 +189,57 @@ const LawyerVerificationsPage: React.FC = () => {
       return name.includes(q) || email.includes(q);
     });
   }, [requests, queryText, statusFilter]);
+
+  const handleChamberChange = useCallback(async (uid: string, chamberId: string) => {
+    setApprovalFields((prev) => ({
+      ...prev,
+      [uid]: {
+        ...(prev[uid] || {
+          chamberId: '',
+          practiceId: '',
+          title: 'Select a title',
+          region: 'Select a region',
+        }),
+        chamberId,
+        practiceId: '',
+      },
+    }));
+    setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: [] }));
+    if (!chamberId) return;
+    setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: true }));
+    try {
+      const practices = await fetchPracticesForChamber(chamberId);
+      setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: practices }));
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not load practices for this chamber.');
+    } finally {
+      setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: false }));
+    }
+  }, []);
+
+  const handleApprovalImageChange = useCallback((uid: string, file: File | null) => {
+    if (!file) {
+      setApprovalImageFiles((prev) => ({ ...prev, [uid]: null }));
+      setApprovalImagePreview((prev) => ({ ...prev, [uid]: null }));
+      return;
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please upload a JPEG, PNG, or GIF image');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    setApprovalImageFiles((prev) => ({ ...prev, [uid]: file }));
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setApprovalImagePreview((prev) => ({ ...prev, [uid]: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   const reviewRequest = async (request: VerificationRequest, decision: 'approved' | 'rejected') => {
     if (!currentAdmin || currentAdmin.baseRole !== 'main_admin') {
@@ -79,8 +253,37 @@ const LawyerVerificationsPage: React.FC = () => {
       return;
     }
 
+    if (decision === 'approved') {
+      const f = approvalFields[request.uid];
+      if (
+        !f?.chamberId ||
+        !f?.practiceId ||
+        !f?.title ||
+        f.title === 'Select a title' ||
+        !f?.region ||
+        f.region === 'Select a region'
+      ) {
+        toast.error('Choose chamber, practice, title, and region before approving.');
+        return;
+      }
+    }
+
     setBusyUid(request.uid);
+    let approvedPicUrl: string | undefined;
     try {
+      if (decision === 'approved') {
+        const f = approvalFields[request.uid]!;
+        const picFile = approvalImageFiles[request.uid];
+        if (picFile) {
+          const uploaded = await uploadApprovalProfileImage(f.chamberId, request.uid, picFile);
+          if (!uploaded) {
+            toast.error('Failed to upload profile picture. Try again or remove the image.');
+            return;
+          }
+          approvedPicUrl = uploaded;
+        }
+      }
+
       await updateDoc(doc(db, 'LawyerVerificationRequests', request.uid), {
         status: decision,
         rejectionReason: decision === 'rejected' ? reason : null,
@@ -90,18 +293,38 @@ const LawyerVerificationsPage: React.FC = () => {
       });
 
       if (decision === 'approved') {
+        const f = approvalFields[request.uid]!;
         await setDoc(
           doc(db, 'Users', request.uid),
           {
             Role: true,
             Status: true,
             Designation: 'Lawyer',
+            'Chamber ID': f.chamberId,
+            'Practice ID': f.practiceId,
+            Title: f.title,
+            Region: f.region,
+            Experience: 1,
             lawyerVerificationStatus: 'approved',
             lawyerVerifiedAt: serverTimestamp(),
             lawyerVerifiedBy: currentAdmin.uid,
+            ...(approvedPicUrl ? { 'User Pic': approvedPicUrl } : {}),
           },
           { merge: true }
         );
+
+        const scheduleRef = doc(db, 'Users', request.uid, 'Schedule', request.uid);
+        const scheduleSnap = await getDoc(scheduleRef);
+        if (!scheduleSnap.exists()) {
+          await setDoc(scheduleRef, {
+            'Active Days': 5,
+            'Off Days': 2,
+            Shift: 1,
+            'Shift Start': Timestamp.fromDate(new Date()),
+            'Shift Switch': 0,
+          });
+        }
+
         toast.success('Application approved. User account is now verified as lawyer.');
       } else {
         await setDoc(
@@ -131,7 +354,8 @@ const LawyerVerificationsPage: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-bold text-slate-900">Lawyer Verification Requests</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Super admins can review uploaded documents and approve or reject lawyer verification requests.
+            Super admins review documents and, when approving, assign chamber, practice, title, region, and an optional
+            profile photo (these are not collected on the public signup form).
           </p>
         </div>
 
@@ -169,6 +393,14 @@ const LawyerVerificationsPage: React.FC = () => {
                 'Unnamed applicant';
               const isPending = request.status === 'pending';
               const busy = busyUid === request.uid;
+              const af = approvalFields[request.uid] || {
+                chamberId: '',
+                practiceId: '',
+                title: 'Select a title',
+                region: 'Select a region',
+              };
+              const practiceOpts = practiceOptionsByUid[request.uid] || [];
+              const loadingP = loadingPracticesForUid[request.uid];
 
               return (
                 <div key={request.uid} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -247,6 +479,99 @@ const LawyerVerificationsPage: React.FC = () => {
 
                   {isPending && (
                     <div className="mt-4 space-y-3">
+                      <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4">
+                        <p className="mb-3 text-sm font-semibold text-slate-800">Assignment when approving</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Select
+                            label="Chamber"
+                            value={af.chamberId}
+                            onChange={(value) => void handleChamberChange(request.uid, value)}
+                            options={[
+                              { value: '', label: 'Select chamber' },
+                              ...chambers.map((c) => ({
+                                value: c.id,
+                                label: String(c['Chamber Name'] || c.name || c.id),
+                              })),
+                            ]}
+                          />
+                          <Select
+                            label="Practice"
+                            value={af.practiceId}
+                            disabled={!af.chamberId || !!loadingP}
+                            onChange={(value) =>
+                              setApprovalFields((prev) => ({
+                                ...prev,
+                                [request.uid]: {
+                                  ...(prev[request.uid] || af),
+                                  practiceId: value,
+                                },
+                              }))
+                            }
+                            options={[
+                              {
+                                value: '',
+                                label: loadingP
+                                  ? 'Loading practices…'
+                                  : af.chamberId
+                                    ? 'Select practice'
+                                    : 'Select a chamber first',
+                              },
+                              ...practiceOpts.map((p) => ({
+                                value: p.id,
+                                label: p['Practice Name'] || p['Practice ID'] || p.id,
+                              })),
+                            ]}
+                          />
+                          <Select
+                            label="Title"
+                            value={af.title}
+                            onChange={(value) =>
+                              setApprovalFields((prev) => ({
+                                ...prev,
+                                [request.uid]: { ...(prev[request.uid] || af), title: value },
+                              }))
+                            }
+                            options={TITLE_OPTIONS.map((t) => ({ value: t, label: t }))}
+                          />
+                          <Select
+                            label="Region"
+                            value={af.region}
+                            onChange={(value) =>
+                              setApprovalFields((prev) => ({
+                                ...prev,
+                                [request.uid]: { ...(prev[request.uid] || af), region: value },
+                              }))
+                            }
+                            options={REGION_OPTIONS.map((r) => ({ value: r, label: r }))}
+                          />
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-sm font-medium text-gray-700">
+                              Profile picture <span className="font-normal text-slate-500">(optional)</span>
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/gif"
+                              onChange={(e) =>
+                                handleApprovalImageChange(request.uid, e.target.files?.[0] || null)
+                              }
+                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                            />
+                            {approvalImagePreview[request.uid] ? (
+                              <img
+                                src={approvalImagePreview[request.uid]!}
+                                alt="Preview"
+                                className="mt-2 h-20 w-20 rounded-full border border-slate-200 object-cover"
+                              />
+                            ) : null}
+                          </div>
+                        </div>
+                        {af.chamberId && !loadingP && practiceOpts.length === 0 ? (
+                          <p className="mt-2 text-xs text-amber-800">
+                            This chamber has no practices linked yet. Add practices under chamber settings before
+                            approving.
+                          </p>
+                        ) : null}
+                      </div>
                       <textarea
                         value={rejectionReasons[request.uid] || ''}
                         onChange={(e) =>

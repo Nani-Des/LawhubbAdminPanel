@@ -2,6 +2,7 @@ import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
   getAuth,
+  signInWithEmailAndPassword,
   signOut,
   updateProfile,
   type Auth,
@@ -37,6 +38,32 @@ export async function createManagedAuthUser(
   if (displayName) {
     await updateProfile(credential.user, { displayName });
   }
+
+  return {
+    user: credential.user,
+    auth: secondaryAuth,
+    release: async () => {
+      if (secondaryAuth.currentUser) {
+        await signOut(secondaryAuth);
+      }
+    },
+  };
+}
+
+/**
+ * Signs in with an isolated auth instance (same secondary app as provisioning) so the browser's
+ * primary Firebase Auth session is unchanged — used on public flows like lawyer signup with an existing account.
+ */
+export async function signInExistingUserForProvisioning(
+  email: string,
+  password: string
+): Promise<ProvisionedAuthUser> {
+  const secondaryAuth = getAuth(getSecondaryApp());
+  const credential = await signInWithEmailAndPassword(
+    secondaryAuth,
+    email.trim(),
+    password
+  );
 
   return {
     user: credential.user,

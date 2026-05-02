@@ -1,16 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Timestamp, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { deleteUser } from 'firebase/auth';
 import toast from 'react-hot-toast';
 import { db, storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { createManagedAuthUser, type ProvisionedAuthUser } from '../utils/managedAuthProvisioning';
+import {
+  createManagedAuthUser,
+  signInExistingUserForProvisioning,
+  type ProvisionedAuthUser,
+} from '../utils/managedAuthProvisioning';
+
+type SignupMode = 'new' | 'existing';
 
 const LawyerSignupPage: React.FC = () => {
   const navigate = useNavigate();
+  const [signupMode, setSignupMode] = useState<SignupMode>('new');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     fname: '',
@@ -38,43 +45,16 @@ const LawyerSignupPage: React.FC = () => {
     return { url, path: filePath, name: file.name };
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const persistLawyerApplication = async (uid: string, opts?: { setCreatedAt?: boolean }) => {
+    const practiceLicence = await uploadDocument(uid, 'practice_licence', practiceLicenceFile!);
+    const barEnrolment = await uploadDocument(uid, 'bar_enrolment', barEnrolmentFile!);
+    const gbaMembership = gbaMembershipFile
+      ? await uploadDocument(uid, 'gba_membership', gbaMembershipFile)
+      : null;
 
-    if (!practiceLicenceFile) {
-      toast.error('Practising licence (GLC certificate) is required.');
-      return;
-    }
-    if (!barEnrolmentFile) {
-      toast.error('Proof of enrolment / call to the Bar is required.');
-      return;
-    }
-
-    const normalizedPassword = form.password.trim();
-    if (!/^[A-Za-z0-9]{6,}$/.test(normalizedPassword)) {
-      toast.error('Password must be at least 6 characters and contain only letters and numbers.');
-      return;
-    }
-    if (normalizedPassword !== form.confirmPassword.trim()) {
-      toast.error('Passwords do not match.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    let createdAuthUser: ProvisionedAuthUser | null = null;
-
-    try {
-      const managed = await createManagedAuthUser(form.email.trim(), normalizedPassword, fullName);
-      createdAuthUser = managed;
-      const uid = managed.user.uid;
-
-      const practiceLicence = await uploadDocument(uid, 'practice_licence', practiceLicenceFile);
-      const barEnrolment = await uploadDocument(uid, 'bar_enrolment', barEnrolmentFile);
-      const gbaMembership = gbaMembershipFile
-        ? await uploadDocument(uid, 'gba_membership', gbaMembershipFile)
-        : null;
-
-      await setDoc(doc(db, 'Users', uid), {
+    await setDoc(
+      doc(db, 'Users', uid),
+      {
         'User ID': uid,
         Fname: form.fname.trim(),
         Lname: form.lname.trim(),
@@ -88,40 +68,119 @@ const LawyerSignupPage: React.FC = () => {
         'User Pic': '',
         Role: false,
         Status: true,
-        CreatedAt: Timestamp.fromDate(new Date()),
         lawyerVerificationStatus: 'pending',
         lawyerVerificationRequestedAt: serverTimestamp(),
-      });
+        ...(opts?.setCreatedAt ? { CreatedAt: Timestamp.fromDate(new Date()) } : {}),
+      },
+      { merge: true }
+    );
 
-      await setDoc(doc(db, 'LawyerVerificationRequests', uid), {
-        uid,
-        email: form.email.trim(),
-        firstName: form.fname.trim(),
-        lastName: form.lname.trim(),
-        fullName,
-        mobile: form.mobile.trim(),
-        status: 'pending',
-        requestedRole: 'lawyer',
-        documents: {
-          practiceLicence,
-          barEnrolment,
-          gbaMembership,
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    await setDoc(doc(db, 'LawyerVerificationRequests', uid), {
+      uid,
+      email: form.email.trim(),
+      firstName: form.fname.trim(),
+      lastName: form.lname.trim(),
+      fullName,
+      mobile: form.mobile.trim(),
+      status: 'pending',
+      requestedRole: 'lawyer',
+      documents: {
+        practiceLicence,
+        barEnrolment,
+        gbaMembership,
+      },
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!practiceLicenceFile) {
+      toast.error('Practising licence (GLC certificate) is required.');
+      return;
+    }
+    if (!barEnrolmentFile) {
+      toast.error('Proof of enrolment / call to the Bar is required.');
+      return;
+    }
+
+    if (signupMode === 'new') {
+      const normalizedPassword = form.password.trim();
+      if (!/^[A-Za-z0-9]{6,}$/.test(normalizedPassword)) {
+        toast.error('Password must be at least 6 characters and contain only letters and numbers.');
+        return;
+      }
+      if (normalizedPassword !== form.confirmPassword.trim()) {
+        toast.error('Passwords do not match.');
+        return;
+      }
+    } else {
+      if (!form.password.trim()) {
+        toast.error('Enter your account password.');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    let createdAuthUser: ProvisionedAuthUser | null = null;
+
+    try {
+      let uid: string;
+
+      if (signupMode === 'new') {
+        const normalizedPassword = form.password.trim();
+        const managed = await createManagedAuthUser(form.email.trim(), normalizedPassword, fullName);
+        createdAuthUser = managed;
+        uid = managed.user.uid;
+
+        await persistLawyerApplication(uid, { setCreatedAt: true });
+      } else {
+        const managed = await signInExistingUserForProvisioning(form.email.trim(), form.password);
+        createdAuthUser = managed;
+        uid = managed.user.uid;
+
+        const reqSnap = await getDoc(doc(db, 'LawyerVerificationRequests', uid));
+        const existingReq = reqSnap.data();
+        if (existingReq?.status === 'pending') {
+          toast.error('You already have a lawyer verification application pending.');
+          return;
+        }
+
+        const userSnap = await getDoc(doc(db, 'Users', uid));
+        const userData = userSnap.data();
+        if (userData?.lawyerVerificationStatus === 'pending') {
+          toast.error('You already have a lawyer verification application pending.');
+          return;
+        }
+        if (userData?.lawyerVerificationStatus === 'approved' && userData?.Role) {
+          toast.error('This account is already verified as a lawyer.');
+          return;
+        }
+
+        await persistLawyerApplication(uid, { setCreatedAt: !userSnap.exists() });
+      }
 
       toast.success('Application submitted. A super admin will verify your documents.');
       navigate('/login');
     } catch (err: any) {
       console.error('Failed to submit lawyer signup request:', err);
-      if (err?.code === 'auth/email-already-in-use') {
-        toast.error('This email is already in use. Use a different email.');
+      const code = err?.code as string | undefined;
+      if (code === 'auth/email-already-in-use') {
+        toast.error('This email already has an account. Choose “Use my existing account” below and sign in.');
+      } else if (
+        code === 'auth/user-not-found' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/invalid-credential' ||
+        code === 'auth/invalid-login-credentials'
+      ) {
+        toast.error('Incorrect email or password.');
       } else {
         toast.error('Could not submit application. Please try again.');
       }
 
-      if (createdAuthUser) {
+      if (createdAuthUser && signupMode === 'new') {
         try {
           await deleteUser(createdAuthUser.user);
         } catch (cleanupErr) {
@@ -141,8 +200,33 @@ const LawyerSignupPage: React.FC = () => {
       <div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
         <h1 className="text-2xl font-bold text-slate-900">Lawyer Registration</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Create a normal user account and submit documents for super-admin verification.
+          Submit documents for super-admin verification. Create a new login or use an account you already have on LawHubb.
         </p>
+
+        <div className="mt-5 flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <button
+            type="button"
+            onClick={() => setSignupMode('new')}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              signupMode === 'new'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Create new account
+          </button>
+          <button
+            type="button"
+            onClick={() => setSignupMode('existing')}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              signupMode === 'existing'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Use my existing account
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -176,23 +260,36 @@ const LawyerSignupPage: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input
-              label="Password"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-              helperText="Use letters and numbers only, minimum 6 characters."
-              required
-            />
-            <Input
-              label="Confirm Password"
-              type="password"
-              value={form.confirmPassword}
-              onChange={(e) => setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-              required
-            />
-          </div>
+          {signupMode === 'new' ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label="Password"
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                helperText="Use letters and numbers only, minimum 6 characters."
+                required
+              />
+              <Input
+                label="Confirm Password"
+                type="password"
+                value={form.confirmPassword}
+                onChange={(e) => setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                required
+              />
+            </div>
+          ) : (
+            <div>
+              <Input
+                label="Password"
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                helperText="Sign in with the password for this email so we can attach the application to your account."
+                required
+              />
+            </div>
+          )}
 
           <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div>
