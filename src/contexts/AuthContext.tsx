@@ -11,6 +11,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { effectiveCountryCode } from '../constants/countries';
 
 const PORTAL_STORAGE_KEY = 'lawhubb_login_portal';
 /** Persists across reloads so we know whether to restore admin or member workspace session */
@@ -31,6 +32,8 @@ interface AdminSession {
   hospitalName?: string;
   permissions?: string[] | { [key: string]: boolean };
   name?: string;
+  /** ISO 3166-1 alpha-2; missing profile field defaults to GH for legacy users */
+  countryCode: string;
 }
 
 interface DoctorSession {
@@ -39,6 +42,8 @@ interface DoctorSession {
   name?: string;
   chamberId?: string;
   chamberName?: string;
+  /** ISO 3166-1 alpha-2; missing profile field defaults to GH for legacy users */
+  countryCode: string;
 }
 
 export type AppSession = AdminSession | DoctorSession;
@@ -185,6 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const chamberId = resolveChamberIdFromUser(userData);
         const chamberName = await fetchChamberName(chamberId);
+        const countryCode = effectiveCountryCode(userData as Record<string, unknown>);
 
         setCurrentAdmin(null);
         setCurrentDoctor({
@@ -193,6 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: userName,
           chamberId,
           chamberName,
+          countryCode,
         });
         setIsAuthenticated(true);
         sessionStorage.setItem(SESSION_KIND_KEY, 'doctor');
@@ -234,6 +241,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
+        const countryCode = effectiveCountryCode(userData as Record<string, unknown>);
+
         setCurrentDoctor(null);
         setCurrentAdmin({
           kind: 'admin',
@@ -245,6 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           hospitalName,
           permissions: (userData.Permissions || userData.permissions) as AdminSession['permissions'],
           name: userName,
+          countryCode,
         });
         setIsAuthenticated(true);
         sessionStorage.setItem(SESSION_KIND_KEY, 'admin');

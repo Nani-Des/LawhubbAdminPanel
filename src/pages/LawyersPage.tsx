@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Edit, Calendar, Lock, UserX, UserCheck, X, Shield, ShieldOff, Upload } from "lucide-react";
 import { useHospital } from "../contexts/HospitalContext";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  COUNTRY_OPTIONS,
+  DEFAULT_COUNTRY_CODE,
+  effectiveCountryCode,
+} from "../constants/countries";
 import Layout from "../components/layout/Layout";
 import Button from "../components/ui/Button";
 import Modal from "../components/ui/Modal";
@@ -118,6 +124,7 @@ const LawyersPage: React.FC = () => {
     updateUser,
     hospital,
   } = useHospital();
+  const { currentAdmin } = useAuth();
   const [users, setUsers] = useState(contextUsers);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -147,6 +154,7 @@ const LawyersPage: React.FC = () => {
     Role: true,
     Status: true,
     Region: "",
+    Country: DEFAULT_COUNTRY_CODE,
     "User Pic": "",
      Experience: 1,
   });
@@ -188,8 +196,18 @@ const LawyersPage: React.FC = () => {
       return;
     }
 
+    const passesCountry = (user: Record<string, unknown>) => {
+      if (currentAdmin?.baseRole === "main_admin") return true;
+      const adminCc =
+        currentAdmin?.countryCode ?? DEFAULT_COUNTRY_CODE;
+      return effectiveCountryCode(user) === adminCc;
+    };
+
     const filterUsers = (users: any[]) =>
-      users.filter((user) => user["Chamber ID"] === hospital.id);
+      users.filter(
+        (user) =>
+          user["Chamber ID"] === hospital.id && passesCountry(user)
+      );
 
     if (
       contextUsers.some(
@@ -225,11 +243,18 @@ const LawyersPage: React.FC = () => {
       );
       return () => unsub();
     }
-  }, [contextUsers, hospital?.id]);
+  }, [contextUsers, hospital?.id, currentAdmin?.baseRole, currentAdmin?.countryCode]);
+
+  const passesCountryFilter = (user: Record<string, unknown>) => {
+    if (currentAdmin?.baseRole === "main_admin") return true;
+    const adminCc = currentAdmin?.countryCode ?? DEFAULT_COUNTRY_CODE;
+    return effectiveCountryCode(user) === adminCc;
+  };
 
   const filteredUsers = users.filter(
     (user) =>
       user["Chamber ID"] === hospital?.id &&
+      passesCountryFilter(user) &&
         (user.Fname.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.Lname.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (departments
@@ -675,6 +700,7 @@ const LawyersPage: React.FC = () => {
       Designation: string;
       'Practice ID': string;
       Region: string;
+      Country?: string;
       'User Pic': string;
       'Active Days': number;
       'Off Days': number;
@@ -742,6 +768,7 @@ const LawyersPage: React.FC = () => {
             "Practice ID": lawyerData["Practice ID"],
             "Chamber ID": hospital?.id ?? "",
             Region: lawyerData.Region,
+            Country: lawyerData.Country || DEFAULT_COUNTRY_CODE,
             Status: true,
             Role: true,
             CreatedAt: Timestamp.fromDate(new Date()),
@@ -902,6 +929,7 @@ const LawyersPage: React.FC = () => {
       Role: true,
       Status: true,
       Region: "",
+      Country: currentAdmin?.countryCode ?? DEFAULT_COUNTRY_CODE,
       "User Pic": "",
       Experience: 1,
     });
@@ -1147,6 +1175,9 @@ const LawyersPage: React.FC = () => {
                           Role: user.Role,
                           Status: user.Status,
                           Region: user.Region,
+                          Country:
+                            (user as any).Country ||
+                            effectiveCountryCode(user as Record<string, unknown>),
                           "User Pic": user["User Pic"]
                             ? String(user["User Pic"])
                             : "",
@@ -1432,7 +1463,20 @@ const LawyersPage: React.FC = () => {
                       disabled={departments.length === 0}
                     />
                     <Select
-                      label="Region"
+                      label="Country"
+                      value={formData.Country}
+                      onChange={(value) =>
+                        setFormData({ ...formData, Country: value })
+                      }
+                      options={COUNTRY_OPTIONS.map((c) => ({
+                        value: c.code,
+                        label: `${c.name} (${c.code})`,
+                      }))}
+                      required
+                      className="bg-gray-50 border-gray-200 text-gray-900"
+                    />
+                    <Select
+                      label="State / region (local)"
                       value={formData.Region}
                       onChange={(value) =>
                         setFormData({ ...formData, Region: value })
@@ -1442,7 +1486,7 @@ const LawyersPage: React.FC = () => {
                         label: region,
                       }))}
                       required
-                      className="bg-gray-50 border-gray-200 text-gray-900"
+                      className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
                     />
                   </div>
                   {departments.length === 0 && (
@@ -1632,7 +1676,20 @@ const LawyersPage: React.FC = () => {
                   disabled={departments.length === 0}
                 />
                 <Select
-                  label="Region"
+                  label="Country"
+                  value={formData.Country}
+                  onChange={(value) =>
+                    setFormData({ ...formData, Country: value })
+                  }
+                  options={COUNTRY_OPTIONS.map((c) => ({
+                    value: c.code,
+                    label: `${c.name} (${c.code})`,
+                  }))}
+                  required
+                  className="bg-gray-50 border-gray-200 text-gray-900"
+                />
+                <Select
+                  label="State / region (local)"
                   value={formData.Region}
                   onChange={(value) =>
                     setFormData({ ...formData, Region: value })
@@ -1642,7 +1699,7 @@ const LawyersPage: React.FC = () => {
                     label: region,
                   }))}
                   required
-                  className="bg-gray-50 border-gray-200 text-gray-900"
+                  className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
                 />
               </div>
               {departments.length === 0 && (

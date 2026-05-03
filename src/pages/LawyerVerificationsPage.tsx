@@ -24,6 +24,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import toast from 'react-hot-toast';
 import { BadgeCheck, FileCheck2, XCircle } from 'lucide-react';
 import { Chamber, Practice } from '../types';
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE } from '../constants/countries';
 
 type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -39,6 +40,8 @@ interface VerificationRequest {
   lastName?: string;
   fullName?: string;
   mobile?: string;
+  /** ISO 3166-1 alpha-2 from application */
+  countryCode?: string;
   status: VerificationStatus;
   documents?: {
     practiceLicence?: VerificationDoc;
@@ -49,7 +52,8 @@ interface VerificationRequest {
 }
 
 const TITLE_OPTIONS = ['Select a title', 'Esq.', 'Mr.', 'Mrs.', 'Miss.', 'Dr.'];
-const REGION_OPTIONS = [
+/** Ghana local areas — legacy field stored as `Region` on Users */
+const GHANA_LOCAL_REGION_OPTIONS = [
   'Select a region',
   'Western North',
   'Western',
@@ -73,7 +77,10 @@ interface ApprovalFields {
   chamberId: string;
   practiceId: string;
   title: string;
+  /** Ghana local region label (stored as Region on Users) */
   region: string;
+  /** ISO country code */
+  countryCode: string;
 }
 
 async function fetchPracticesForChamber(chamberId: string): Promise<Practice[]> {
@@ -167,11 +174,14 @@ const LawyerVerificationsPage: React.FC = () => {
       const next = { ...prev };
       for (const r of requests) {
         if (r.status === 'pending' && !next[r.uid]) {
+          const fromReq = r.countryCode?.trim().toUpperCase();
+          const codeOk = fromReq && COUNTRY_OPTIONS.some((c) => c.code === fromReq);
           next[r.uid] = {
             chamberId: '',
             practiceId: '',
             title: 'Select a title',
             region: 'Select a region',
+            countryCode: codeOk ? fromReq! : DEFAULT_COUNTRY_CODE,
           };
         }
       }
@@ -199,6 +209,7 @@ const LawyerVerificationsPage: React.FC = () => {
           practiceId: '',
           title: 'Select a title',
           region: 'Select a region',
+          countryCode: DEFAULT_COUNTRY_CODE,
         }),
         chamberId,
         practiceId: '',
@@ -261,9 +272,10 @@ const LawyerVerificationsPage: React.FC = () => {
         !f?.title ||
         f.title === 'Select a title' ||
         !f?.region ||
-        f.region === 'Select a region'
+        f.region === 'Select a region' ||
+        !f?.countryCode
       ) {
-        toast.error('Choose chamber, practice, title, and region before approving.');
+        toast.error('Choose chamber, practice, title, country, and local region before approving.');
         return;
       }
     }
@@ -304,6 +316,7 @@ const LawyerVerificationsPage: React.FC = () => {
             'Practice ID': f.practiceId,
             Title: f.title,
             Region: f.region,
+            Country: f.countryCode,
             Experience: 1,
             lawyerVerificationStatus: 'approved',
             lawyerVerifiedAt: serverTimestamp(),
@@ -398,6 +411,7 @@ const LawyerVerificationsPage: React.FC = () => {
                 practiceId: '',
                 title: 'Select a title',
                 region: 'Select a region',
+                countryCode: DEFAULT_COUNTRY_CODE,
               };
               const practiceOpts = practiceOptionsByUid[request.uid] || [];
               const loadingP = loadingPracticesForUid[request.uid];
@@ -409,6 +423,11 @@ const LawyerVerificationsPage: React.FC = () => {
                       <h2 className="text-lg font-semibold text-slate-900">{applicantName}</h2>
                       <p className="text-sm text-slate-600">{request.email || 'No email'}</p>
                       <p className="text-xs text-slate-500">{request.mobile || 'No mobile number'}</p>
+                      {request.countryCode ? (
+                        <p className="text-xs text-slate-500">
+                          Country: {countryNameFromCode(request.countryCode)} ({request.countryCode})
+                        </p>
+                      ) : null}
                     </div>
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -534,7 +553,21 @@ const LawyerVerificationsPage: React.FC = () => {
                             options={TITLE_OPTIONS.map((t) => ({ value: t, label: t }))}
                           />
                           <Select
-                            label="Region"
+                            label="Country"
+                            value={af.countryCode}
+                            onChange={(value) =>
+                              setApprovalFields((prev) => ({
+                                ...prev,
+                                [request.uid]: { ...(prev[request.uid] || af), countryCode: value },
+                              }))
+                            }
+                            options={COUNTRY_OPTIONS.map((c) => ({
+                              value: c.code,
+                              label: `${c.name} (${c.code})`,
+                            }))}
+                          />
+                          <Select
+                            label="State / region (local)"
                             value={af.region}
                             onChange={(value) =>
                               setApprovalFields((prev) => ({
@@ -542,7 +575,7 @@ const LawyerVerificationsPage: React.FC = () => {
                                 [request.uid]: { ...(prev[request.uid] || af), region: value },
                               }))
                             }
-                            options={REGION_OPTIONS.map((r) => ({ value: r, label: r }))}
+                            options={GHANA_LOCAL_REGION_OPTIONS.map((r) => ({ value: r, label: r }))}
                           />
                           <div className="sm:col-span-2">
                             <label className="mb-1 block text-sm font-medium text-gray-700">

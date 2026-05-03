@@ -7,11 +7,13 @@ import { db, storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 import {
   createManagedAuthUser,
   signInExistingUserForProvisioning,
   type ProvisionedAuthUser,
 } from '../utils/managedAuthProvisioning';
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE } from '../constants/countries';
 
 type SignupMode = 'new' | 'existing';
 
@@ -26,6 +28,7 @@ const LawyerSignupPage: React.FC = () => {
     mobile: '',
     password: '',
     confirmPassword: '',
+    countryCode: DEFAULT_COUNTRY_CODE,
   });
   const [practiceLicenceFile, setPracticeLicenceFile] = useState<File | null>(null);
   const [barEnrolmentFile, setBarEnrolmentFile] = useState<File | null>(null);
@@ -65,6 +68,8 @@ const LawyerSignupPage: React.FC = () => {
         'Practice ID': '',
         'Chamber ID': '',
         Region: '',
+        Country: form.countryCode.trim().toUpperCase(),
+        CountryRequired: false,
         'User Pic': '',
         Role: false,
         Status: true,
@@ -82,6 +87,7 @@ const LawyerSignupPage: React.FC = () => {
       lastName: form.lname.trim(),
       fullName,
       mobile: form.mobile.trim(),
+      countryCode: form.countryCode.trim().toUpperCase(),
       status: 'pending',
       requestedRole: 'lawyer',
       documents: {
@@ -259,6 +265,16 @@ const LawyerSignupPage: React.FC = () => {
               required
             />
           </div>
+
+          <Select
+            label="Country"
+            value={form.countryCode}
+            onChange={(value) => setForm((prev) => ({ ...prev, countryCode: value }))}
+            options={COUNTRY_OPTIONS.map((c) => ({
+              value: c.code,
+              label: `${c.name} (${c.code})`,
+            }))}
+          />
 
           {signupMode === 'new' ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
