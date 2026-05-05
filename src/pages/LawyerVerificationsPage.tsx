@@ -22,7 +22,7 @@ import {
 import { db, storage } from '../firebase';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import toast from 'react-hot-toast';
-import { BadgeCheck, FileCheck2, XCircle } from 'lucide-react';
+import { BadgeCheck, ChevronDown, ChevronUp, FileCheck2, XCircle } from 'lucide-react';
 import { Chamber, Practice } from '../types';
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, countryNameFromCode } from '../constants/countries';
 
@@ -135,6 +135,7 @@ const LawyerVerificationsPage: React.FC = () => {
   const [loadingPracticesForUid, setLoadingPracticesForUid] = useState<Record<string, boolean>>({});
   const [approvalImageFiles, setApprovalImageFiles] = useState<Record<string, File | null>>({});
   const [approvalImagePreview, setApprovalImagePreview] = useState<Record<string, string | null>>({});
+  const [expandedByUid, setExpandedByUid] = useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     const q = query(collection(db, 'LawyerVerificationRequests'), orderBy('createdAt', 'desc'));
@@ -183,6 +184,18 @@ const LawyerVerificationsPage: React.FC = () => {
             region: 'Select a region',
             countryCode: codeOk ? fromReq! : DEFAULT_COUNTRY_CODE,
           };
+        }
+      }
+      return next;
+    });
+  }, [requests]);
+
+  useEffect(() => {
+    setExpandedByUid((prev) => {
+      const next = { ...prev };
+      for (const r of requests) {
+        if (typeof next[r.uid] === 'undefined') {
+          next[r.uid] = r.status === 'pending';
         }
       }
       return next;
@@ -415,6 +428,7 @@ const LawyerVerificationsPage: React.FC = () => {
               };
               const practiceOpts = practiceOptionsByUid[request.uid] || [];
               const loadingP = loadingPracticesForUid[request.uid];
+              const isExpanded = expandedByUid[request.uid] ?? false;
 
               return (
                 <div key={request.uid} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -429,220 +443,240 @@ const LawyerVerificationsPage: React.FC = () => {
                         </p>
                       ) : null}
                     </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        request.status === 'approved'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : request.status === 'rejected'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      {request.status.toUpperCase()}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <a
-                      href={request.documents?.practiceLicence?.url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`rounded-xl border p-3 text-sm ${
-                        request.documents?.practiceLicence?.url
-                          ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
-                          : 'pointer-events-none border-slate-100 bg-slate-50 text-slate-400'
-                      }`}
-                    >
-                      <p className="font-semibold">Practising licence (GLC)</p>
-                      <p className="mt-1 truncate text-xs">
-                        {request.documents?.practiceLicence?.name || 'Not uploaded'}
-                      </p>
-                    </a>
-                    <a
-                      href={request.documents?.barEnrolment?.url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`rounded-xl border p-3 text-sm ${
-                        request.documents?.barEnrolment?.url
-                          ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
-                          : 'pointer-events-none border-slate-100 bg-slate-50 text-slate-400'
-                      }`}
-                    >
-                      <p className="font-semibold">Call to the Bar / enrolment</p>
-                      <p className="mt-1 truncate text-xs">
-                        {request.documents?.barEnrolment?.name || 'Not uploaded'}
-                      </p>
-                    </a>
-                    <a
-                      href={request.documents?.gbaMembership?.url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`rounded-xl border p-3 text-sm ${
-                        request.documents?.gbaMembership?.url
-                          ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
-                          : 'pointer-events-none border-slate-100 bg-slate-50 text-slate-400'
-                      }`}
-                    >
-                      <p className="font-semibold">GBA membership (optional)</p>
-                      <p className="mt-1 truncate text-xs">
-                        {request.documents?.gbaMembership?.name || 'Not uploaded'}
-                      </p>
-                    </a>
-                  </div>
-
-                  {request.status === 'rejected' && request.rejectionReason && (
-                    <div className="mt-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700">
-                      <span className="font-semibold">Rejection reason:</span> {request.rejectionReason}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          request.status === 'approved'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : request.status === 'rejected'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {request.status.toUpperCase()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedByUid((prev) => ({
+                            ...prev,
+                            [request.uid]: !(prev[request.uid] ?? false),
+                          }))
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? 'Collapse' : 'Expand'}
+                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
                     </div>
-                  )}
+                  </div>
 
-                  {isPending && (
-                    <div className="mt-4 space-y-3">
-                      <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4">
-                        <p className="mb-3 text-sm font-semibold text-slate-800">Assignment when approving</p>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <Select
-                            label="Chamber"
-                            value={af.chamberId}
-                            onChange={(value) => void handleChamberChange(request.uid, value)}
-                            options={[
-                              { value: '', label: 'Select chamber' },
-                              ...chambers.map((c) => ({
-                                value: c.id,
-                                label: String(c['Chamber Name'] || c.name || c.id),
-                              })),
-                            ]}
-                          />
-                          <Select
-                            label="Practice"
-                            value={af.practiceId}
-                            disabled={!af.chamberId || !!loadingP}
-                            onChange={(value) =>
-                              setApprovalFields((prev) => ({
-                                ...prev,
-                                [request.uid]: {
-                                  ...(prev[request.uid] || af),
-                                  practiceId: value,
-                                },
-                              }))
-                            }
-                            options={[
-                              {
-                                value: '',
-                                label: loadingP
-                                  ? 'Loading practices…'
-                                  : af.chamberId
-                                    ? 'Select practice'
-                                    : 'Select a chamber first',
-                              },
-                              ...practiceOpts.map((p) => ({
-                                value: p.id,
-                                label: p['Practice Name'] || p['Practice ID'] || p.id,
-                              })),
-                            ]}
-                          />
-                          <Select
-                            label="Title"
-                            value={af.title}
-                            onChange={(value) =>
-                              setApprovalFields((prev) => ({
-                                ...prev,
-                                [request.uid]: { ...(prev[request.uid] || af), title: value },
-                              }))
-                            }
-                            options={TITLE_OPTIONS.map((t) => ({ value: t, label: t }))}
-                          />
-                          <Select
-                            label="Country"
-                            value={af.countryCode}
-                            onChange={(value) =>
-                              setApprovalFields((prev) => ({
-                                ...prev,
-                                [request.uid]: { ...(prev[request.uid] || af), countryCode: value },
-                              }))
-                            }
-                            options={COUNTRY_OPTIONS.map((c) => ({
-                              value: c.code,
-                              label: `${c.name} (${c.code})`,
-                            }))}
-                          />
-                          <Select
-                            label="State / region (local)"
-                            value={af.region}
-                            onChange={(value) =>
-                              setApprovalFields((prev) => ({
-                                ...prev,
-                                [request.uid]: { ...(prev[request.uid] || af), region: value },
-                              }))
-                            }
-                            options={GHANA_LOCAL_REGION_OPTIONS.map((r) => ({ value: r, label: r }))}
-                          />
-                          <div className="sm:col-span-2">
-                            <label className="mb-1 block text-sm font-medium text-gray-700">
-                              Profile picture <span className="font-normal text-slate-500">(optional)</span>
-                            </label>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/gif"
-                              onChange={(e) =>
-                                handleApprovalImageChange(request.uid, e.target.files?.[0] || null)
-                              }
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                            />
-                            {approvalImagePreview[request.uid] ? (
-                              <img
-                                src={approvalImagePreview[request.uid]!}
-                                alt="Preview"
-                                className="mt-2 h-20 w-20 rounded-full border border-slate-200 object-cover"
+                  {isExpanded && (
+                    <>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <a
+                          href={request.documents?.practiceLicence?.url || '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`rounded-xl border p-3 text-sm ${
+                            request.documents?.practiceLicence?.url
+                              ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
+                              : 'pointer-events-none border-slate-100 bg-slate-50 text-slate-400'
+                          }`}
+                        >
+                          <p className="font-semibold">Practising licence (GLC)</p>
+                          <p className="mt-1 truncate text-xs">
+                            {request.documents?.practiceLicence?.name || 'Not uploaded'}
+                          </p>
+                        </a>
+                        <a
+                          href={request.documents?.barEnrolment?.url || '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`rounded-xl border p-3 text-sm ${
+                            request.documents?.barEnrolment?.url
+                              ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
+                              : 'pointer-events-none border-slate-100 bg-slate-50 text-slate-400'
+                          }`}
+                        >
+                          <p className="font-semibold">Call to the Bar / enrolment</p>
+                          <p className="mt-1 truncate text-xs">
+                            {request.documents?.barEnrolment?.name || 'Not uploaded'}
+                          </p>
+                        </a>
+                        <a
+                          href={request.documents?.gbaMembership?.url || '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`rounded-xl border p-3 text-sm ${
+                            request.documents?.gbaMembership?.url
+                              ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
+                              : 'pointer-events-none border-slate-100 bg-slate-50 text-slate-400'
+                          }`}
+                        >
+                          <p className="font-semibold">GBA membership (optional)</p>
+                          <p className="mt-1 truncate text-xs">
+                            {request.documents?.gbaMembership?.name || 'Not uploaded'}
+                          </p>
+                        </a>
+                      </div>
+
+                      {request.status === 'rejected' && request.rejectionReason && (
+                        <div className="mt-3 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+                          <span className="font-semibold">Rejection reason:</span> {request.rejectionReason}
+                        </div>
+                      )}
+
+                      {isPending && (
+                        <div className="mt-4 space-y-3">
+                          <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4">
+                            <p className="mb-3 text-sm font-semibold text-slate-800">Assignment when approving</p>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Select
+                                label="Chamber"
+                                value={af.chamberId}
+                                onChange={(value) => void handleChamberChange(request.uid, value)}
+                                options={[
+                                  { value: '', label: 'Select chamber' },
+                                  ...chambers.map((c) => ({
+                                    value: c.id,
+                                    label: String(c['Chamber Name'] || c.name || c.id),
+                                  })),
+                                ]}
                               />
+                              <Select
+                                label="Practice"
+                                value={af.practiceId}
+                                disabled={!af.chamberId || !!loadingP}
+                                onChange={(value) =>
+                                  setApprovalFields((prev) => ({
+                                    ...prev,
+                                    [request.uid]: {
+                                      ...(prev[request.uid] || af),
+                                      practiceId: value,
+                                    },
+                                  }))
+                                }
+                                options={[
+                                  {
+                                    value: '',
+                                    label: loadingP
+                                      ? 'Loading practices…'
+                                      : af.chamberId
+                                        ? 'Select practice'
+                                        : 'Select a chamber first',
+                                  },
+                                  ...practiceOpts.map((p) => ({
+                                    value: p.id,
+                                    label: p['Practice Name'] || p['Practice ID'] || p.id,
+                                  })),
+                                ]}
+                              />
+                              <Select
+                                label="Title"
+                                value={af.title}
+                                onChange={(value) =>
+                                  setApprovalFields((prev) => ({
+                                    ...prev,
+                                    [request.uid]: { ...(prev[request.uid] || af), title: value },
+                                  }))
+                                }
+                                options={TITLE_OPTIONS.map((t) => ({ value: t, label: t }))}
+                              />
+                              <Select
+                                label="Country"
+                                value={af.countryCode}
+                                onChange={(value) =>
+                                  setApprovalFields((prev) => ({
+                                    ...prev,
+                                    [request.uid]: { ...(prev[request.uid] || af), countryCode: value },
+                                  }))
+                                }
+                                options={COUNTRY_OPTIONS.map((c) => ({
+                                  value: c.code,
+                                  label: `${c.name} (${c.code})`,
+                                }))}
+                              />
+                              <Select
+                                label="State / region (local)"
+                                value={af.region}
+                                onChange={(value) =>
+                                  setApprovalFields((prev) => ({
+                                    ...prev,
+                                    [request.uid]: { ...(prev[request.uid] || af), region: value },
+                                  }))
+                                }
+                                options={GHANA_LOCAL_REGION_OPTIONS.map((r) => ({ value: r, label: r }))}
+                              />
+                              <div className="sm:col-span-2">
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                  Profile picture <span className="font-normal text-slate-500">(optional)</span>
+                                </label>
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/gif"
+                                  onChange={(e) =>
+                                    handleApprovalImageChange(request.uid, e.target.files?.[0] || null)
+                                  }
+                                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                                />
+                                {approvalImagePreview[request.uid] ? (
+                                  <img
+                                    src={approvalImagePreview[request.uid]!}
+                                    alt="Preview"
+                                    className="mt-2 h-20 w-20 rounded-full border border-slate-200 object-cover"
+                                  />
+                                ) : null}
+                              </div>
+                            </div>
+                            {af.chamberId && !loadingP && practiceOpts.length === 0 ? (
+                              <p className="mt-2 text-xs text-amber-800">
+                                This chamber has no practices linked yet. Add practices under chamber settings before
+                                approving.
+                              </p>
                             ) : null}
                           </div>
+                          <textarea
+                            value={rejectionReasons[request.uid] || ''}
+                            onChange={(e) =>
+                              setRejectionReasons((prev) => ({ ...prev, [request.uid]: e.target.value }))
+                            }
+                            placeholder="Optional for approval, required for rejection."
+                            className="min-h-[84px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="success"
+                              isLoading={busy}
+                              onClick={() => void reviewRequest(request, 'approved')}
+                              icon={<BadgeCheck className="h-4 w-4" />}
+                            >
+                              Approve as lawyer
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              isLoading={busy}
+                              onClick={() => void reviewRequest(request, 'rejected')}
+                              icon={<XCircle className="h-4 w-4" />}
+                            >
+                              Reject
+                            </Button>
+                          </div>
                         </div>
-                        {af.chamberId && !loadingP && practiceOpts.length === 0 ? (
-                          <p className="mt-2 text-xs text-amber-800">
-                            This chamber has no practices linked yet. Add practices under chamber settings before
-                            approving.
-                          </p>
-                        ) : null}
-                      </div>
-                      <textarea
-                        value={rejectionReasons[request.uid] || ''}
-                        onChange={(e) =>
-                          setRejectionReasons((prev) => ({ ...prev, [request.uid]: e.target.value }))
-                        }
-                        placeholder="Optional for approval, required for rejection."
-                        className="min-h-[84px] w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="success"
-                          isLoading={busy}
-                          onClick={() => void reviewRequest(request, 'approved')}
-                          icon={<BadgeCheck className="h-4 w-4" />}
-                        >
-                          Approve as lawyer
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="danger"
-                          isLoading={busy}
-                          onClick={() => void reviewRequest(request, 'rejected')}
-                          icon={<XCircle className="h-4 w-4" />}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                      )}
 
-                  {!isPending && (
-                    <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
-                      <FileCheck2 className="h-4 w-4" />
-                      Review completed
-                    </div>
+                      {!isPending && (
+                        <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+                          <FileCheck2 className="h-4 w-4" />
+                          Review completed
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
