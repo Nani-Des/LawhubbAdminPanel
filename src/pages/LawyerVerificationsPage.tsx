@@ -24,7 +24,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import toast from 'react-hot-toast';
 import { BadgeCheck, FileCheck2, XCircle } from 'lucide-react';
 import { Chamber, Practice } from '../types';
-import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE } from '../constants/countries';
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, countryNameFromCode } from '../constants/countries';
 
 type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
