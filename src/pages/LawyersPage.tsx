@@ -294,6 +294,7 @@ const LawyersPage: React.FC = () => {
     { key: "services", label: "Services" },
     { key: "referrals", label: "Referrals" },
     { key: "notifications", label: "Notifications" },
+    { key: "lawyer_verifications", label: "Lawyer Verifications" },
   ];
 
   const Title = ["Select a title", "Esq.", "Mr.", "Mrs.", "Miss.", "Dr."];
@@ -1076,7 +1077,7 @@ const LawyersPage: React.FC = () => {
             <SearchSkeleton />
           ) : (
             <Input
-              placeholder="Search by name or department..."
+              placeholder="Search by name or practice..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-md bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-500"

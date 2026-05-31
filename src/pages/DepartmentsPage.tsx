@@ -136,7 +136,7 @@ const DepartmentForm = React.memo(
 
         {mode === 'select' && (
           <Select
-            label="Select Department"
+            label="Select Practice"
             value={formData.selectedDepartmentId || ''}
             onChange={(value) => handleInputChange('selectedDepartmentId', value)}
             options={[
@@ -194,10 +194,10 @@ const DepartmentForm = React.memo(
             {isLoading
               ? 'Saving...'
               : selectedDepartment
-              ? 'Update Department'
+              ? 'Update Practice'
               : mode === 'select'
               ? 'Add to chamber'
-              : 'Create and Add Department'}
+              : 'Create and Add Practice'}
           </Button>
         </div>
       </form>
@@ -249,7 +249,7 @@ const DepartmentsPage: React.FC = () => {
         setAvailableDepartments(unassignedDepts);
       } catch (err) {
         console.error('Failed to fetch departments:', err);
-        toast.error('Failed to load available departments');
+        toast.error('Failed to load available practices');
       } finally {
         setIsPageLoading(false);
       }
@@ -316,13 +316,13 @@ const DepartmentsPage: React.FC = () => {
         } else if (mode === 'select') {
           // Add existing department to hospital
           if (!formData.selectedDepartmentId) {
-            toast.error('Please select a department');
+            toast.error('Please select a practice');
             setIsLoading(false);
             return;
           }
           console.log('Adding existing department:', formData.selectedDepartmentId);
           await addDepartment(formData.selectedDepartmentId);
-          toast.success('Department added to Chamber');
+          toast.success('Practice added to chamber');
           setIsAddModalOpen(false);
         } else {
           // Create new practice and add to chamber
@@ -351,7 +351,7 @@ const DepartmentsPage: React.FC = () => {
         resetForm();
       } catch (err) {
         console.error('Failed to save department:', err);
-        toast.error('Failed to save department');
+        toast.error('Failed to save practice');
       } finally {
         setIsLoading(false);
       }
@@ -376,12 +376,12 @@ const DepartmentsPage: React.FC = () => {
       }
       console.log('Deleting department:', selectedDepartment);
       await deleteDepartment(selectedDepartment);
-      toast.success('Department removed from hospital');
+      toast.success('Practice removed from chamber');
       setIsDeleteModalOpen(false);
       setSelectedDepartment(null);
     } catch (err) {
       console.error('Failed to delete department:', err);
-      toast.error('Failed to remove department');
+      toast.error('Failed to remove practice');
     } finally {
       setIsLoading(false);
     }
@@ -439,9 +439,9 @@ const DepartmentsPage: React.FC = () => {
         ) : (
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-teal-900">Departments</h1>
+              <h1 className="text-3xl font-bold text-teal-900">Practices</h1>
               <p className="mt-2 text-base text-gray-700">
-                Manage Chamber departments
+                Manage chamber practices
               </p>
             </div>
             <Button
@@ -452,7 +452,7 @@ const DepartmentsPage: React.FC = () => {
               className="flex items-center bg-gray-600 hover:bg-gray-700 text-white"
             >
               <FolderPlus className="w-5 h-5 mr-2" />
-              Add Department
+              Add Practice
             </Button>
           </div>
         )}
@@ -465,7 +465,7 @@ const DepartmentsPage: React.FC = () => {
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-teal-600" />
               <Input
-                placeholder="Search departments..."
+                placeholder="Search practices..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 bg-gray-100 border-gray-200 text-teal-900 placeholder-teal-600"
@@ -478,7 +478,7 @@ const DepartmentsPage: React.FC = () => {
         {!isPageLoading && filteredDepartments.length === 0 && (
           <div className="text-center py-10">
             <p className="text-teal-600 text-lg">
-              {searchTerm ? 'No departments found matching your search.' : 'No departments available.'}
+              {searchTerm ? 'No practices found matching your search.' : 'No practices available.'}
             </p>
           </div>
         )}
@@ -489,8 +489,8 @@ const DepartmentsPage: React.FC = () => {
             <Table>
               <Table.Header>
                 <Table.Row>
-                  <Table.Head className="bg-gray-100 text-teal-900">Department Name</Table.Head>
-                  <Table.Head className="bg-gray-100 text-teal-900">Department ID</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice Name</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice ID</Table.Head>
                   <Table.Head className="bg-gray-100 text-teal-900">Actions</Table.Head>
                 </Table.Row>
               </Table.Header>
@@ -506,8 +506,8 @@ const DepartmentsPage: React.FC = () => {
             <Table>
               <Table.Header>
                 <Table.Row>
-                  <Table.Head className="bg-gray-100 text-teal-900">Department Name</Table.Head>
-                  <Table.Head className="bg-gray-100 text-teal-900">Department ID</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice Name</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice ID</Table.Head>
                   <Table.Head className="bg-gray-100 text-teal-900">Actions</Table.Head>
                 </Table.Row>
               </Table.Header>
@@ -590,7 +590,7 @@ const DepartmentsPage: React.FC = () => {
         <Modal
           isOpen={isAddModalOpen}
           onClose={closeAddModal}
-          title="Add Department"
+          title="Add Practice"
           size="lg"
         >
           {isPageLoading ? (
@@ -614,7 +614,7 @@ const DepartmentsPage: React.FC = () => {
         <Modal
           isOpen={isEditModalOpen}
           onClose={closeEditModal}
-          title="Edit Department"
+          title="Edit Practice"
           size="lg"
         >
           {isPageLoading ? (
@@ -623,20 +623,28 @@ const DepartmentsPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  label="Department Name"
-                  value={formData['Department Name']}
-                  onChange={(e) => setFormData((prev: any) => ({ ...prev, 'Department Name': e.target.value }))}
+                  label="Practice Name"
+                  value={formData['Practice Name'] || formData['Department Name'] || ''}
+                  onChange={(e) => setFormData((prev: any) => ({
+                    ...prev,
+                    'Practice Name': e.target.value,
+                    'Department Name': e.target.value,
+                  }))}
                   required
                   className="bg-gray-50 border-gray-200 text-teal-900 placeholder-teal-600"
-                  placeholder="e.g., Cardiology"
+                  placeholder="e.g., Family Law"
                 />
                 <Input
-                  label="Department ID"
-                  value={formData['Department ID']}
-                  onChange={(e) => setFormData((prev: any) => ({ ...prev, 'Department ID': e.target.value }))}
+                  label="Practice ID"
+                  value={formData['Practice ID'] || formData['Department ID'] || ''}
+                  onChange={(e) => setFormData((prev: any) => ({
+                    ...prev,
+                    'Practice ID': e.target.value,
+                    'Department ID': e.target.value,
+                  }))}
                   required
                   className="bg-gray-50 border-gray-200 text-teal-900 placeholder-teal-600"
-                  placeholder="e.g., CARDIO123"
+                  placeholder="e.g., FAMILY123"
                 />
               </div>
               <div className="flex justify-end space-x-2">
@@ -653,7 +661,7 @@ const DepartmentsPage: React.FC = () => {
                   disabled={isLoading}
                   className="bg-gray-600 hover:bg-gray-700 text-white"
                 >
-                  {isLoading ? 'Saving...' : 'Update Department'}
+                  {isLoading ? 'Saving...' : 'Update Practice'}
                 </Button>
               </div>
             </form>
@@ -664,12 +672,12 @@ const DepartmentsPage: React.FC = () => {
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={closeDeleteModal}
-          title="Remove Department"
+          title="Remove Practice"
           size="md"
         >
           <div className="space-y-6">
             <p className="text-gray-700">
-              Are you sure you want to remove the department "
+              Are you sure you want to remove the practice "
               {((departments.find((d) => d.id === selectedDepartment) as any)?.['Practice Name'] || (departments.find((d) => d.id === selectedDepartment) as any)?.['Department Name'] || '')}" from the
               chamber? This action cannot be undone.
             </p>

@@ -126,6 +126,17 @@ const PermissionProtectedRoute: React.FC<{
     return <Navigate to="/lawyer" replace />;
   }
   
+  // Lawyer verifications: super admins or delegated permission (global, no chamber required).
+  if (permission === 'lawyer_verifications') {
+    if (currentAdmin?.baseRole === 'main_admin') {
+      return <>{children}</>;
+    }
+    if (hasPermission(currentAdmin?.permissions, permission)) {
+      return <>{children}</>;
+    }
+    return <Navigate to="/" replace />;
+  }
+  
   // For main_admin, require chamber selection
   if (currentAdmin?.baseRole === 'main_admin' && !chamber) {
     return <Navigate to="/select-chamber" replace />;
@@ -331,9 +342,9 @@ const App: React.FC = () => {
             <Route
               path="/lawyer-verifications"
               element={
-                <MainAdminOnlyRoute>
+                <PermissionProtectedRoute permission="lawyer_verifications">
                   <LawyerVerificationsPage />
-                </MainAdminOnlyRoute>
+                </PermissionProtectedRoute>
               }
             />
             <Route 

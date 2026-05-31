@@ -147,7 +147,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (isMainAdminSelectingChamber || isMainAdminWithoutChamber) return false;
     if (item.path === '/') return true; // Dashboard is always accessible
     if (item.path === '/reports') return currentAdmin?.baseRole === 'main_admin';
-    if (item.path === '/lawyer-verifications') return currentAdmin?.baseRole === 'main_admin';
+    if (item.path === '/lawyer-verifications') {
+      return currentAdmin?.baseRole === 'main_admin' || hasPermission('lawyer_verifications');
+    }
     // main_admin has access to all pages after selecting a chamber
     if (currentAdmin?.baseRole === 'main_admin') return true;
     return hasPermission(item.permission);

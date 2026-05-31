@@ -42,6 +42,11 @@ interface VerificationRequest {
   mobile?: string;
   /** ISO 3166-1 alpha-2 from application */
   countryCode?: string;
+  /** Applicant's preferred chamber (from mobile/web signup) */
+  chamberId?: string;
+  chamberName?: string;
+  practiceId?: string;
+  practiceName?: string;
   status: VerificationStatus;
   documents?: {
     practiceLicence?: VerificationDoc;
@@ -103,6 +108,16 @@ async function fetchPracticesForChamber(chamberId: string): Promise<Practice[]> 
     });
   }
   return practices;
+}
+
+function hasLawyerVerificationAccess(
+  permissions: string[] | { [key: string]: boolean } | undefined,
+  baseRole?: string
+): boolean {
+  if (baseRole === 'main_admin') return true;
+  if (!permissions) return false;
+  if (Array.isArray(permissions)) return permissions.includes('lawyer_verifications');
+  return permissions.lawyer_verifications === true;
 }
 
 async function uploadApprovalProfileImage(
@@ -178,8 +193,8 @@ const LawyerVerificationsPage: React.FC = () => {
           const fromReq = r.countryCode?.trim().toUpperCase();
           const codeOk = fromReq && COUNTRY_OPTIONS.some((c) => c.code === fromReq);
           next[r.uid] = {
-            chamberId: '',
-            practiceId: '',
+            chamberId: r.chamberId || '',
+            practiceId: r.practiceId || '',
             title: 'Select a title',
             region: 'Select a region',
             countryCode: codeOk ? fromReq! : DEFAULT_COUNTRY_CODE,
@@ -213,6 +228,28 @@ const LawyerVerificationsPage: React.FC = () => {
     });
   }, [requests, queryText, statusFilter]);
 
+  const loadPracticeOptionsForUid = useCallback(async (uid: string, chamberId: string) => {
+    if (!chamberId) return;
+    setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: true }));
+    try {
+      const practices = await fetchPracticesForChamber(chamberId);
+      setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: practices }));
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not load practices for this chamber.');
+    } finally {
+      setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    for (const r of requests) {
+      if (r.status !== 'pending' || !r.chamberId) continue;
+      if (practiceOptionsByUid[r.uid] != null || loadingPracticesForUid[r.uid]) continue;
+      void loadPracticeOptionsForUid(r.uid, r.chamberId);
+    }
+  }, [requests, practiceOptionsByUid, loadingPracticesForUid, loadPracticeOptionsForUid]);
+
   const handleChamberChange = useCallback(async (uid: string, chamberId: string) => {
     setApprovalFields((prev) => ({
       ...prev,
@@ -230,17 +267,8 @@ const LawyerVerificationsPage: React.FC = () => {
     }));
     setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: [] }));
     if (!chamberId) return;
-    setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: true }));
-    try {
-      const practices = await fetchPracticesForChamber(chamberId);
-      setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: practices }));
-    } catch (e) {
-      console.error(e);
-      toast.error('Could not load practices for this chamber.');
-    } finally {
-      setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: false }));
-    }
-  }, []);
+    await loadPracticeOptionsForUid(uid, chamberId);
+  }, [loadPracticeOptionsForUid]);
 
   const handleApprovalImageChange = useCallback((uid: string, file: File | null) => {
     if (!file) {
@@ -266,8 +294,8 @@ const LawyerVerificationsPage: React.FC = () => {
   }, []);
 
   const reviewRequest = async (request: VerificationRequest, decision: 'approved' | 'rejected') => {
-    if (!currentAdmin || currentAdmin.baseRole !== 'main_admin') {
-      toast.error('Only super admins can verify lawyer applications.');
+    if (!hasLawyerVerificationAccess(currentAdmin?.permissions, currentAdmin?.baseRole)) {
+      toast.error('You do not have permission to verify lawyer applications.');
       return;
     }
 
@@ -380,8 +408,9 @@ const LawyerVerificationsPage: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-bold text-slate-900">Lawyer Verification Requests</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Super admins review documents and, when approving, assign chamber, practice, title, region, and an optional
-            profile photo (these are not collected on the public signup form).
+            Review submitted documents and approve or reject applications. When approving, confirm chamber,
+            practice, title, region, and an optional profile photo. Applicants may indicate a preferred
+            chamber and practice during registration.
           </p>
         </div>
 
@@ -440,6 +469,16 @@ const LawyerVerificationsPage: React.FC = () => {
                       {request.countryCode ? (
                         <p className="text-xs text-slate-500">
                           Country: {countryNameFromCode(request.countryCode)} ({request.countryCode})
+                        </p>
+                      ) : null}
+                      {request.chamberName || request.chamberId ? (
+                        <p className="text-xs text-slate-500">
+                          Preferred chamber: {request.chamberName || request.chamberId}
+                        </p>
+                      ) : null}
+                      {request.practiceName || request.practiceId ? (
+                        <p className="text-xs text-slate-500">
+                          Preferred practice: {request.practiceName || request.practiceId}
                         </p>
                       ) : null}
                     </div>
