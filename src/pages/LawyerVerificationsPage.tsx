@@ -210,6 +210,20 @@ const LawyerVerificationsPage: React.FC = () => {
     });
   }, [requests]);
 
+  const loadPracticeOptionsForUid = useCallback(async (uid: string, chamberId: string) => {
+    if (!chamberId) return;
+    setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: true }));
+    try {
+      const practices = await fetchPracticesForChamber(chamberId);
+      setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: practices }));
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not load practices for this chamber.');
+    } finally {
+      setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: false }));
+    }
+  }, []);
+
   useEffect(() => {
     void (async () => {
       for (const r of requests) {
@@ -261,20 +275,6 @@ const LawyerVerificationsPage: React.FC = () => {
       return name.includes(q) || email.includes(q);
     });
   }, [requests, queryText, statusFilter]);
-
-  const loadPracticeOptionsForUid = useCallback(async (uid: string, chamberId: string) => {
-    if (!chamberId) return;
-    setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: true }));
-    try {
-      const practices = await fetchPracticesForChamber(chamberId);
-      setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: practices }));
-    } catch (e) {
-      console.error(e);
-      toast.error('Could not load practices for this chamber.');
-    } finally {
-      setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: false }));
-    }
-  }, []);
 
   useEffect(() => {
     for (const r of requests) {
