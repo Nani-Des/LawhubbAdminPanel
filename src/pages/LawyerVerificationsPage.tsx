@@ -25,6 +25,13 @@ import toast from 'react-hot-toast';
 import { BadgeCheck, ChevronDown, ChevronUp, FileCheck2, XCircle } from 'lucide-react';
 import { Chamber, Practice } from '../types';
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, countryNameFromCode } from '../constants/countries';
+import { NA_CHAMBER_NAME, resolveNaChamberId } from '../constants/chamberConstants';
+import {
+  GHANA_REGION_SELECT_OPTIONS,
+  isGhanaCountry,
+  isValidRegionForCountry,
+  regionFieldLabel,
+} from '../constants/countryRegions';
 
 type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -42,6 +49,10 @@ interface VerificationRequest {
   mobile?: string;
   /** ISO 3166-1 alpha-2 from application */
   countryCode?: string;
+  /** Applicant nationality (ISO alpha-2) */
+  nationality?: string;
+  /** Applicant local region / state / province */
+  region?: string;
   /** Applicant's preferred chamber (from mobile/web signup) */
   chamberId?: string;
   chamberName?: string;
@@ -61,35 +72,14 @@ interface VerificationRequest {
 }
 
 const TITLE_OPTIONS = ['Select a title', 'Esq.', 'Mr.', 'Mrs.', 'Miss.', 'Dr.'];
-/** Ghana local areas — legacy field stored as `Region` on Users */
-const GHANA_LOCAL_REGION_OPTIONS = [
-  'Select a region',
-  'Western North',
-  'Western',
-  'Oti',
-  'Bono',
-  'Bono East',
-  'Ahafo',
-  'Greater Accra',
-  'Eastern',
-  'Central',
-  'Northern',
-  'Savannah',
-  'North East',
-  'Volta',
-  'Upper East',
-  'Upper West',
-  'Ashanti',
-];
 
 interface ApprovalFields {
   chamberId: string;
   practiceId: string;
   title: string;
-  /** Ghana local region label (stored as Region on Users) */
   region: string;
-  /** ISO country code */
   countryCode: string;
+  nationality: string;
 }
 
 async function fetchPracticesForChamber(chamberId: string): Promise<Practice[]> {
@@ -196,18 +186,58 @@ const LawyerVerificationsPage: React.FC = () => {
         if (r.status === 'pending' && !next[r.uid]) {
           const fromReq = r.countryCode?.trim().toUpperCase();
           const codeOk = fromReq && COUNTRY_OPTIONS.some((c) => c.code === fromReq);
+          const natReq = r.nationality?.trim().toUpperCase();
+          const natOk = natReq && COUNTRY_OPTIONS.some((c) => c.code === natReq);
+          const countryCode = codeOk ? fromReq! : DEFAULT_COUNTRY_CODE;
+          const fromRegion = r.region?.trim();
+          const regionDefault =
+            fromRegion && isValidRegionForCountry(countryCode, fromRegion)
+              ? fromRegion
+              : isGhanaCountry(countryCode)
+                ? 'Select a region'
+                : '';
           next[r.uid] = {
             chamberId: r.chamberId || '',
             practiceId: r.practiceId || '',
             title: 'Select a title',
-            region: 'Select a region',
-            countryCode: codeOk ? fromReq! : DEFAULT_COUNTRY_CODE,
+            region: regionDefault,
+            countryCode,
+            nationality: natOk ? natReq! : countryCode,
           };
         }
       }
       return next;
     });
   }, [requests]);
+
+  useEffect(() => {
+    void (async () => {
+      for (const r of requests) {
+        if (r.status !== 'pending' || !r.altChamber?.trim()) continue;
+        const current = approvalFields[r.uid];
+        if (current?.chamberId) continue;
+        const naId = await resolveNaChamberId();
+        if (!naId) continue;
+        setApprovalFields((prev) => ({
+          ...prev,
+          [r.uid]: {
+            ...(prev[r.uid] || {
+              chamberId: '',
+              practiceId: r.practiceId || '',
+              title: 'Select a title',
+              region: isGhanaCountry(r.countryCode) ? 'Select a region' : r.region || '',
+              countryCode: r.countryCode || DEFAULT_COUNTRY_CODE,
+              nationality: r.nationality || r.countryCode || DEFAULT_COUNTRY_CODE,
+            }),
+            chamberId: naId,
+          },
+        }));
+        if (!practiceOptionsByUid[r.uid] && !loadingPracticesForUid[r.uid]) {
+          void loadPracticeOptionsForUid(r.uid, naId);
+        }
+      }
+    })();
+  }, [requests, approvalFields, practiceOptionsByUid, loadingPracticesForUid, loadPracticeOptionsForUid]);
 
   useEffect(() => {
     setExpandedByUid((prev) => {
@@ -262,8 +292,9 @@ const LawyerVerificationsPage: React.FC = () => {
           chamberId: '',
           practiceId: '',
           title: 'Select a title',
-          region: 'Select a region',
+          region: isGhanaCountry(DEFAULT_COUNTRY_CODE) ? 'Select a region' : '',
           countryCode: DEFAULT_COUNTRY_CODE,
+          nationality: DEFAULT_COUNTRY_CODE,
         }),
         chamberId,
         practiceId: '',
@@ -316,11 +347,11 @@ const LawyerVerificationsPage: React.FC = () => {
         !f?.practiceId ||
         !f?.title ||
         f.title === 'Select a title' ||
-        !f?.region ||
-        f.region === 'Select a region' ||
-        !f?.countryCode
+        !f?.countryCode ||
+        !f?.nationality ||
+        !isValidRegionForCountry(f.countryCode, f.region)
       ) {
-        toast.error('Choose chamber, practice, title, country, and local region before approving.');
+        toast.error('Choose chamber, practice, title, nationality, country, and local region before approving.');
         return;
       }
     }
@@ -362,6 +393,7 @@ const LawyerVerificationsPage: React.FC = () => {
             Title: f.title,
             Region: f.region,
             Country: f.countryCode,
+            Nationality: f.nationality,
             Experience: 1,
             lawyerVerificationStatus: 'approved',
             lawyerVerifiedAt: serverTimestamp(),
@@ -456,8 +488,9 @@ const LawyerVerificationsPage: React.FC = () => {
                 chamberId: '',
                 practiceId: '',
                 title: 'Select a title',
-                region: 'Select a region',
+                region: isGhanaCountry(DEFAULT_COUNTRY_CODE) ? 'Select a region' : '',
                 countryCode: DEFAULT_COUNTRY_CODE,
+                nationality: DEFAULT_COUNTRY_CODE,
               };
               const practiceOpts = practiceOptionsByUid[request.uid] || [];
               const loadingP = loadingPracticesForUid[request.uid];
@@ -472,7 +505,17 @@ const LawyerVerificationsPage: React.FC = () => {
                       <p className="text-xs text-slate-500">{request.mobile || 'No mobile number'}</p>
                       {request.countryCode ? (
                         <p className="text-xs text-slate-500">
-                          Country: {countryNameFromCode(request.countryCode)} ({request.countryCode})
+                          Country of practice: {countryNameFromCode(request.countryCode)} ({request.countryCode})
+                        </p>
+                      ) : null}
+                      {request.nationality ? (
+                        <p className="text-xs text-slate-500">
+                          Nationality: {countryNameFromCode(request.nationality)} ({request.nationality})
+                        </p>
+                      ) : null}
+                      {request.region ? (
+                        <p className="text-xs text-slate-500">
+                          {regionFieldLabel(request.countryCode)}: {request.region}
                         </p>
                       ) : null}
                       {request.chamberName || request.chamberId ? (
@@ -601,13 +644,28 @@ const LawyerVerificationsPage: React.FC = () => {
                                 {request.altChamber ? (
                                   <li>
                                     <span className="font-medium">Custom chamber:</span> {request.altChamber}
-                                    <span className="text-amber-800"> (name only — not created on platform)</span>
+                                    <span className="text-amber-800">
+                                      {' '}
+                                      (assign to {NA_CHAMBER_NAME} on approval)
+                                    </span>
                                   </li>
                                 ) : null}
                                 {request.practiceName || request.practiceId ? (
                                   <li>
                                     <span className="font-medium">Primary practice:</span>{' '}
                                     {request.practiceName || request.practiceId}
+                                  </li>
+                                ) : null}
+                                {request.nationality ? (
+                                  <li>
+                                    <span className="font-medium">Nationality:</span>{' '}
+                                    {countryNameFromCode(request.nationality)} ({request.nationality})
+                                  </li>
+                                ) : null}
+                                {request.region ? (
+                                  <li>
+                                    <span className="font-medium">{regionFieldLabel(request.countryCode)}:</span>{' '}
+                                    {request.region}
                                   </li>
                                 ) : null}
                                 {request.altPractice && request.altPractice.length > 0 ? (
@@ -674,12 +732,16 @@ const LawyerVerificationsPage: React.FC = () => {
                                 options={TITLE_OPTIONS.map((t) => ({ value: t, label: t }))}
                               />
                               <Select
-                                label="Country"
+                                label="Country of practice"
                                 value={af.countryCode}
                                 onChange={(value) =>
                                   setApprovalFields((prev) => ({
                                     ...prev,
-                                    [request.uid]: { ...(prev[request.uid] || af), countryCode: value },
+                                    [request.uid]: {
+                                      ...(prev[request.uid] || af),
+                                      countryCode: value,
+                                      region: isGhanaCountry(value) ? 'Select a region' : '',
+                                    },
                                   }))
                                 }
                                 options={COUNTRY_OPTIONS.map((c) => ({
@@ -688,16 +750,47 @@ const LawyerVerificationsPage: React.FC = () => {
                                 }))}
                               />
                               <Select
-                                label="State / region (local)"
-                                value={af.region}
+                                label="Nationality"
+                                value={af.nationality}
                                 onChange={(value) =>
                                   setApprovalFields((prev) => ({
                                     ...prev,
-                                    [request.uid]: { ...(prev[request.uid] || af), region: value },
+                                    [request.uid]: { ...(prev[request.uid] || af), nationality: value },
                                   }))
                                 }
-                                options={GHANA_LOCAL_REGION_OPTIONS.map((r) => ({ value: r, label: r }))}
+                                options={COUNTRY_OPTIONS.map((c) => ({
+                                  value: c.code,
+                                  label: `${c.name} (${c.code})`,
+                                }))}
                               />
+                              {isGhanaCountry(af.countryCode) ? (
+                                <Select
+                                  label={regionFieldLabel(af.countryCode)}
+                                  value={af.region}
+                                  onChange={(value) =>
+                                    setApprovalFields((prev) => ({
+                                      ...prev,
+                                      [request.uid]: { ...(prev[request.uid] || af), region: value },
+                                    }))
+                                  }
+                                  options={GHANA_REGION_SELECT_OPTIONS.map((r) => ({ value: r, label: r }))}
+                                />
+                              ) : (
+                                <Input
+                                  label={regionFieldLabel(af.countryCode)}
+                                  value={af.region}
+                                  onChange={(e) =>
+                                    setApprovalFields((prev) => ({
+                                      ...prev,
+                                      [request.uid]: {
+                                        ...(prev[request.uid] || af),
+                                        region: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  placeholder="Enter state, province, or region"
+                                />
+                              )}
                               <div className="sm:col-span-2">
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                   Profile picture <span className="font-normal text-slate-500">(optional)</span>

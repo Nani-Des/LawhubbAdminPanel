@@ -5,8 +5,14 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   COUNTRY_OPTIONS,
   DEFAULT_COUNTRY_CODE,
+  countryNameFromCode,
   effectiveCountryCode,
 } from "../constants/countries";
+import {
+  GHANA_REGION_SELECT_OPTIONS,
+  isGhanaCountry,
+  regionFieldLabel,
+} from "../constants/countryRegions";
 import Layout from "../components/layout/Layout";
 import Button from "../components/ui/Button";
 import Modal from "../components/ui/Modal";
@@ -160,6 +166,7 @@ const LawyersPage: React.FC = () => {
     Status: true,
     Region: "",
     Country: DEFAULT_COUNTRY_CODE,
+    Nationality: DEFAULT_COUNTRY_CODE,
     "User Pic": "",
      Experience: 1,
   });
@@ -303,25 +310,6 @@ const LawyersPage: React.FC = () => {
   ];
 
   const Title = ["Select a title", "Esq.", "Mr.", "Mrs.", "Miss.", "Dr."];
-  const Region = [
-    "Select a region",
-    "Western North",
-    "Western",
-    "Oti",
-    "Bono",
-    "Bono East",
-    "Ahafo",
-    "Greater Accra",
-    "Eastern",
-    "Central",
-    "Northern",
-    "Savannah",
-    "North East",
-    "Volta",
-    "Upper East",
-    "Upper West",
-    "Ashanti",
-  ];
 
   useEffect(() => {
     async function fetchSchedules() {
@@ -917,6 +905,7 @@ const LawyersPage: React.FC = () => {
       Status: true,
       Region: "",
       Country: currentAdmin?.countryCode ?? DEFAULT_COUNTRY_CODE,
+      Nationality: currentAdmin?.countryCode ?? DEFAULT_COUNTRY_CODE,
       "User Pic": "",
       Experience: 1,
     });
@@ -1121,6 +1110,16 @@ const LawyersPage: React.FC = () => {
                         (d) => d.id === user["Department ID"]
                       )?.["Department Name"] || "N/A"}
                     </p>
+                    {(user as any)["Alt Practice"]?.length > 0 ? (
+                      <p className="text-xs text-gray-600">
+                        Additional: {((user as any)["Alt Practice"] as string[]).join(", ")}
+                      </p>
+                    ) : null}
+                    {(user as any)["Alt Chamber"] ? (
+                      <p className="text-xs text-gray-600">
+                        Custom chamber: {(user as any)["Alt Chamber"]}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
@@ -1164,6 +1163,9 @@ const LawyersPage: React.FC = () => {
                           Region: user.Region,
                           Country:
                             (user as any).Country ||
+                            effectiveCountryCode(user as Record<string, unknown>),
+                          Nationality:
+                            (user as any).Nationality ||
                             effectiveCountryCode(user as Record<string, unknown>),
                           "User Pic": user["User Pic"]
                             ? String(user["User Pic"])
@@ -1450,10 +1452,14 @@ const LawyersPage: React.FC = () => {
                       disabled={departments.length === 0}
                     />
                     <Select
-                      label="Country"
+                      label="Country of practice"
                       value={formData.Country}
                       onChange={(value) =>
-                        setFormData({ ...formData, Country: value })
+                        setFormData({
+                          ...formData,
+                          Country: value,
+                          Region: isGhanaCountry(value) ? "Select a region" : "",
+                        })
                       }
                       options={COUNTRY_OPTIONS.map((c) => ({
                         value: c.code,
@@ -1463,18 +1469,44 @@ const LawyersPage: React.FC = () => {
                       className="bg-gray-50 border-gray-200 text-gray-900"
                     />
                     <Select
-                      label="State / region (local)"
-                      value={formData.Region}
+                      label="Nationality"
+                      value={(formData as any).Nationality || DEFAULT_COUNTRY_CODE}
                       onChange={(value) =>
-                        setFormData({ ...formData, Region: value })
+                        setFormData({ ...formData, Nationality: value } as typeof formData)
                       }
-                      options={Region.map((region) => ({
-                        value: region,
-                        label: region,
+                      options={COUNTRY_OPTIONS.map((c) => ({
+                        value: c.code,
+                        label: `${c.name} (${c.code})`,
                       }))}
                       required
-                      className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
+                    {isGhanaCountry(formData.Country) ? (
+                      <Select
+                        label={regionFieldLabel(formData.Country)}
+                        value={formData.Region}
+                        onChange={(value) =>
+                          setFormData({ ...formData, Region: value })
+                        }
+                        options={GHANA_REGION_SELECT_OPTIONS.map((region) => ({
+                          value: region,
+                          label: region,
+                        }))}
+                        required
+                        className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
+                      />
+                    ) : (
+                      <Input
+                        label={regionFieldLabel(formData.Country)}
+                        value={formData.Region}
+                        onChange={(e) =>
+                          setFormData({ ...formData, Region: e.target.value })
+                        }
+                        placeholder="Enter state, province, or region"
+                        required
+                        className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
+                      />
+                    )}
                   </div>
                   {departments.length === 0 && (
                     <p className="text-sm text-red-600">
@@ -1663,10 +1695,14 @@ const LawyersPage: React.FC = () => {
                   disabled={departments.length === 0}
                 />
                 <Select
-                  label="Country"
+                  label="Country of practice"
                   value={formData.Country}
                   onChange={(value) =>
-                    setFormData({ ...formData, Country: value })
+                    setFormData({
+                      ...formData,
+                      Country: value,
+                      Region: isGhanaCountry(value) ? "Select a region" : "",
+                    })
                   }
                   options={COUNTRY_OPTIONS.map((c) => ({
                     value: c.code,
@@ -1676,18 +1712,44 @@ const LawyersPage: React.FC = () => {
                   className="bg-gray-50 border-gray-200 text-gray-900"
                 />
                 <Select
-                  label="State / region (local)"
-                  value={formData.Region}
+                  label="Nationality"
+                  value={(formData as any).Nationality || DEFAULT_COUNTRY_CODE}
                   onChange={(value) =>
-                    setFormData({ ...formData, Region: value })
+                    setFormData({ ...formData, Nationality: value } as typeof formData)
                   }
-                  options={Region.map((region) => ({
-                    value: region,
-                    label: region,
+                  options={COUNTRY_OPTIONS.map((c) => ({
+                    value: c.code,
+                    label: `${c.name} (${c.code})`,
                   }))}
                   required
-                  className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
+                {isGhanaCountry(formData.Country) ? (
+                  <Select
+                    label={regionFieldLabel(formData.Country)}
+                    value={formData.Region}
+                    onChange={(value) =>
+                      setFormData({ ...formData, Region: value })
+                    }
+                    options={GHANA_REGION_SELECT_OPTIONS.map((region) => ({
+                      value: region,
+                      label: region,
+                    }))}
+                    required
+                    className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
+                  />
+                ) : (
+                  <Input
+                    label={regionFieldLabel(formData.Country)}
+                    value={formData.Region}
+                    onChange={(e) =>
+                      setFormData({ ...formData, Region: e.target.value })
+                    }
+                    placeholder="Enter state, province, or region"
+                    required
+                    className="bg-gray-50 border-gray-200 text-gray-900 md:col-span-2"
+                  />
+                )}
               </div>
               {departments.length === 0 && (
                 <p className="text-sm text-red-600">
@@ -1910,7 +1972,7 @@ const LawyersPage: React.FC = () => {
           onImport={handleBulkImport}
           departments={departments}
           Title={Title}
-          Region={Region}
+          Region={[...GHANA_REGION_SELECT_OPTIONS]}
           existingUsers={users}
         />
       </div>

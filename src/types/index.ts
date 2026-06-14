@@ -67,6 +67,8 @@ export interface Users {
   Region: string;
   /** ISO 3166-1 alpha-2 (e.g. GH). Missing legacy users treated as Ghana in app logic. */
   Country?: string;
+  /** Applicant / user nationality (ISO alpha-2) */
+  Nationality?: string;
   'User Pic': String ;
   Permissions?: string[] | { [key: string]: boolean };
   fcmToken?: string;
