@@ -343,8 +343,7 @@ export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // User functions
 const addUser = async (user: Omit<Users, 'id'>, authUid: string): Promise<string | undefined> => {
   if (!currentAdmin || !chamber) {
-    console.warn('Cannot add user: no admin or chamber');
-    return;
+    throw new Error('Cannot add user: admin session or chamber is not available');
   }
 
   console.log('Adding user:', user);

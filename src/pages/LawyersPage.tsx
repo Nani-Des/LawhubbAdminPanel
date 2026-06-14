@@ -33,12 +33,17 @@ import {
   updateEmail,
   updatePassword,
   getAuth,
-  deleteUser,
-  signOut,
-  sendPasswordResetEmail,
 } from "firebase/auth";
-import { auth } from "../firebase";
-import { createManagedAuthUser, type ProvisionedAuthUser } from "../utils/managedAuthProvisioning";
+import {
+  adminSetMemberPassword,
+  isAllowedMemberPassword,
+  resolveMemberAuthUid,
+} from "../utils/adminSetMemberPassword";
+import {
+  createManagedAuthUser,
+  deleteProvisionedAuthUser,
+  type ProvisionedAuthUser,
+} from "../utils/managedAuthProvisioning";
 
 // Skeleton Loading Components
 const LawyerCardSkeleton = () => (
@@ -465,33 +470,46 @@ const LawyersPage: React.FC = () => {
         return;
       }
 
-      const authUser = await getAuth().currentUser;
-      const isSelfReset = authUser?.uid === user.id;
+      const normalizedPassword = newPassword.trim();
+      if (!isAllowedMemberPassword(normalizedPassword)) {
+        toast.error("Password must be at least 6 characters and contain only letters and numbers.");
+        return;
+      }
+
+      const authUser = getAuth().currentUser;
+      const memberAuthUid = resolveMemberAuthUid(user);
+      const isSelfReset = authUser?.uid === memberAuthUid;
 
       if (isSelfReset && authUser) {
-        const normalizedPassword = newPassword.trim();
-        const isAllowedPassword = /^[A-Za-z0-9]{6,}$/.test(normalizedPassword);
-        if (!isAllowedPassword) {
-          toast.error("Password must be at least 6 characters and contain only letters and numbers.");
-          return;
-        }
         await updatePassword(authUser, normalizedPassword);
-        toast.success(`Password reset for ${user.Email}`);
+        toast.success(`Password updated for ${user.Email}`);
       } else {
-        await sendPasswordResetEmail(auth, user.Email.trim());
-        toast.success(`Password reset email sent to ${user.Email}`);
+        await adminSetMemberPassword(memberAuthUid, normalizedPassword);
+        toast.success(
+          `Password updated for ${user.Email}. They can sign in under Member workspace with this password.`,
+          { duration: 8000 }
+        );
       }
 
       setIsResetPasswordModalOpen(false);
       setNewPassword("");
     } catch (err: any) {
       console.error("Failed to reset password:", err);
-      if (err?.code === "auth/weak-password") {
+      const code = err?.code || err?.details?.code;
+      if (code === "functions/not-found" || code === "functions/unavailable") {
+        toast.error(
+          "Password reset service is not available yet. Deploy Cloud Functions with: firebase deploy --only functions"
+        );
+      } else if (err?.code === "auth/weak-password") {
         toast.error("Password is too weak. Use at least 6 letters/numbers.");
       } else if (err?.code === "auth/requires-recent-login") {
         toast.error("For direct password change, sign out and sign in again, then retry.");
+      } else if (code === "functions/permission-denied") {
+        toast.error(err?.message || "You do not have permission to reset this member's password.");
+      } else if (code === "functions/not-found" && err?.message?.includes("authentication")) {
+        toast.error("No authentication account exists for this member.");
       } else {
-        toast.error("Failed to reset password");
+        toast.error(err?.message || "Failed to reset password");
       }
     } finally {
       setIsLoading(false);
@@ -632,35 +650,37 @@ const LawyersPage: React.FC = () => {
           authUid
         );
 
-        if (typeof newUserId === "string" && newUserId) {
-          userId = newUserId;
-          if (selectedImage) {
-            imageUrl = await uploadImage(newUserId);
-          }
-          const userRef = doc(db, "Users", newUserId);
-          await updateDoc(userRef, {
-            "User ID": newUserId,
-            "User Pic": imageUrl || "",
-          });
-
-          const scheduleSubRef = doc(
-            db,
-            "Users",
-            newUserId,
-            "Schedule",
-            newUserId
-          );
-          await setDoc(scheduleSubRef, {
-            "Active Days": scheduleData["Active Days"],
-            "Off Days": scheduleData["Off Days"],
-            Shift: scheduleData.Shift,
-            "Shift Start": scheduleData["Shift Start"],
-            "Shift Switch": scheduleData["Shift Switch"],
-          });
-
-          toast.success("Member added successfully");
-          toast.success(`Temporary password: ${password}`, { duration: 10000 });
+        if (typeof newUserId !== "string" || !newUserId) {
+          throw new Error("Failed to create user document in Firestore");
         }
+
+        userId = newUserId;
+        if (selectedImage) {
+          imageUrl = await uploadImage(newUserId);
+        }
+        const userRef = doc(db, "Users", newUserId);
+        await updateDoc(userRef, {
+          "User ID": newUserId,
+          "User Pic": imageUrl || "",
+        });
+
+        const scheduleSubRef = doc(
+          db,
+          "Users",
+          newUserId,
+          "Schedule",
+          newUserId
+        );
+        await setDoc(scheduleSubRef, {
+          "Active Days": scheduleData["Active Days"],
+          "Off Days": scheduleData["Off Days"],
+          Shift: scheduleData.Shift,
+          "Shift Start": scheduleData["Shift Start"],
+          "Shift Switch": scheduleData["Shift Switch"],
+        });
+
+        toast.success("Member added successfully");
+        toast.success(`Temporary password: ${password}`, { duration: 10000 });
         setIsAddModalOpen(false);
       }
       resetForm();
@@ -675,11 +695,11 @@ const LawyersPage: React.FC = () => {
 
       if (createdAuthUser) {
         try {
-          await deleteUser(createdAuthUser.user);
+          await deleteProvisionedAuthUser(createdAuthUser);
         } catch (cleanupErr) {
           console.error("Failed to clean up auth account:", cleanupErr);
         } finally {
-          await createdAuthUser.release();
+          createdAuthUser = null;
         }
       }
     } finally {
@@ -714,19 +734,7 @@ const LawyersPage: React.FC = () => {
     let failedCount = 0;
     const errors: string[] = [];
 
-    // Store the current admin user to restore later
-    const currentAdminUser = auth.currentUser;
-    if (!currentAdminUser) {
-      errors.push('No authenticated admin user found');
-      return { success: 0, failed: lawyers.length, errors };
-    }
-
-    // Set flag to prevent logout during bulk import
-    sessionStorage.setItem('bulkImportInProgress', 'true');
-    sessionStorage.setItem('expectedAdminUid', currentAdminUser.uid);
-
-    try {
-      for (const lawyerData of lawyers) {
+    for (const lawyerData of lawyers) {
       let createdAuthUser: ProvisionedAuthUser | null = null;
       try {
         // Check if email already exists in users list
@@ -808,14 +816,13 @@ const LawyersPage: React.FC = () => {
         } else {
           failedCount++;
           errors.push(`${lawyerData.Email}: Failed to create user document`);
-          // Clean up auth account
           if (createdAuthUser) {
             try {
-              await deleteUser(createdAuthUser.user);
+              await deleteProvisionedAuthUser(createdAuthUser);
             } catch (cleanupErr) {
               console.error("Failed to clean up auth account:", cleanupErr);
             } finally {
-              await createdAuthUser.release();
+              createdAuthUser = null;
             }
           }
         }
@@ -840,37 +847,16 @@ const LawyersPage: React.FC = () => {
         // Clean up auth account if it was created
         if (createdAuthUser) {
           try {
-            await deleteUser(createdAuthUser.user);
+            await deleteProvisionedAuthUser(createdAuthUser);
           } catch (cleanupErr) {
             console.error("Failed to clean up auth account:", cleanupErr);
           } finally {
-            await createdAuthUser.release();
+            createdAuthUser = null;
           }
         }
       } finally {
         if (createdAuthUser) {
           await createdAuthUser.release();
-        }
-      }
-      }
-    } finally {
-      // Clear the bulk import flag
-      sessionStorage.removeItem('bulkImportInProgress');
-      sessionStorage.removeItem('expectedAdminUid');
-      
-      // After bulk import, if we're signed in as a different user (a newly created lawyer),
-      // we need to sign out to restore the admin session. However, since we can't 
-      // re-authenticate the admin without their password, the user will need to refresh the page.
-      if (auth.currentUser && auth.currentUser.uid !== currentAdminUser.uid) {
-        console.warn('Signed in as different user after bulk import. Signing out to restore admin session.');
-        // Sign out the current user (the newly created lawyer)
-        // This will trigger the auth state listener, but since we're no longer bulk importing,
-        // it should handle it normally (which means staying signed out until admin signs back in)
-        try {
-          await signOut(auth);
-          toast.error('Bulk import completed, but you were signed out. Please refresh the page and sign back in.');
-        } catch (signOutErr) {
-          console.error('Error signing out after bulk import:', signOutErr);
         }
       }
     }
@@ -1758,7 +1744,7 @@ const LawyersPage: React.FC = () => {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                helperText="For your own account: letters/numbers, 6+ chars (e.g. Des12345). For other members, a reset email is sent."
+                helperText="Letters and numbers only, at least 6 characters (e.g. Des12345). Members sign in under Member workspace."
                 className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>

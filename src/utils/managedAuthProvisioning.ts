@@ -1,7 +1,9 @@
 import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
-  getAuth,
+  deleteUser,
+  initializeAuth,
+  inMemoryPersistence,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -18,10 +20,26 @@ export interface ProvisionedAuthUser {
   release: () => Promise<void>;
 }
 
+let secondaryAuth: Auth | null = null;
+
 function getSecondaryApp(): FirebaseApp {
   const existingApp = getApps().find((app) => app.name === SECONDARY_APP_NAME);
   if (existingApp) return existingApp;
   return initializeApp(firebaseConfig, SECONDARY_APP_NAME);
+}
+
+/**
+ * Isolated auth instance (in-memory only) so provisioning a new account does not
+ * replace the admin's persisted browser session on the primary auth instance.
+ */
+function getSecondaryAuth(): Auth {
+  if (secondaryAuth) return secondaryAuth;
+
+  const secondaryApp = getSecondaryApp();
+  secondaryAuth = initializeAuth(secondaryApp, {
+    persistence: inMemoryPersistence,
+  });
+  return secondaryAuth;
 }
 
 /**
@@ -32,8 +50,8 @@ export async function createManagedAuthUser(
   password: string,
   displayName?: string
 ): Promise<ProvisionedAuthUser> {
-  const secondaryAuth = getAuth(getSecondaryApp());
-  const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+  const auth = getSecondaryAuth();
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
 
   if (displayName) {
     await updateProfile(credential.user, { displayName });
@@ -41,10 +59,10 @@ export async function createManagedAuthUser(
 
   return {
     user: credential.user,
-    auth: secondaryAuth,
+    auth,
     release: async () => {
-      if (secondaryAuth.currentUser) {
-        await signOut(secondaryAuth);
+      if (auth.currentUser) {
+        await signOut(auth);
       }
     },
   };
@@ -58,20 +76,25 @@ export async function signInExistingUserForProvisioning(
   email: string,
   password: string
 ): Promise<ProvisionedAuthUser> {
-  const secondaryAuth = getAuth(getSecondaryApp());
-  const credential = await signInWithEmailAndPassword(
-    secondaryAuth,
-    email.trim(),
-    password
-  );
+  const auth = getSecondaryAuth();
+  const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
 
   return {
     user: credential.user,
-    auth: secondaryAuth,
+    auth,
     release: async () => {
-      if (secondaryAuth.currentUser) {
-        await signOut(secondaryAuth);
+      if (auth.currentUser) {
+        await signOut(auth);
       }
     },
   };
+}
+
+/** Deletes a user created through the isolated provisioning auth instance. */
+export async function deleteProvisionedAuthUser(provisioned: ProvisionedAuthUser): Promise<void> {
+  try {
+    await deleteUser(provisioned.user);
+  } finally {
+    await provisioned.release();
+  }
 }
