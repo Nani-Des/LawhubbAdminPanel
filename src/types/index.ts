@@ -52,6 +52,10 @@ export interface Users {
   Lname: string;
   ["Practice ID"]: string;
   ["Chamber ID"]: string;
+  /** Custom chamber name typed by applicant (not an official chamber) */
+  ["Alt Chamber"]?: string;
+  /** Additional practice names (typed or extra selections) */
+  ["Alt Practice"]?: string[];
   Title: string;
   Email: string;
   Designation: string;

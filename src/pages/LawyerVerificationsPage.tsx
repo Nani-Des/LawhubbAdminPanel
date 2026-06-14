@@ -47,6 +47,10 @@ interface VerificationRequest {
   chamberName?: string;
   practiceId?: string;
   practiceName?: string;
+  /** Custom chamber name typed by applicant (not an official chamber) */
+  altChamber?: string;
+  /** Additional practice names (typed or extra selections) */
+  altPractice?: string[];
   status: VerificationStatus;
   documents?: {
     practiceLicence?: VerificationDoc;
@@ -410,7 +414,7 @@ const LawyerVerificationsPage: React.FC = () => {
           <p className="mt-2 text-sm text-slate-600">
             Review submitted documents and approve or reject applications. When approving, confirm chamber,
             practice, title, region, and an optional profile photo. Applicants may indicate a preferred
-            chamber and practice during registration.
+            chamber and practice during registration, including custom names that are not yet on the platform.
           </p>
         </div>
 
@@ -476,9 +480,19 @@ const LawyerVerificationsPage: React.FC = () => {
                           Preferred chamber: {request.chamberName || request.chamberId}
                         </p>
                       ) : null}
+                      {request.altChamber ? (
+                        <p className="text-xs text-amber-700">
+                          Custom chamber (not on platform): {request.altChamber}
+                        </p>
+                      ) : null}
                       {request.practiceName || request.practiceId ? (
                         <p className="text-xs text-slate-500">
-                          Preferred practice: {request.practiceName || request.practiceId}
+                          Primary practice: {request.practiceName || request.practiceId}
+                        </p>
+                      ) : null}
+                      {request.altPractice && request.altPractice.length > 0 ? (
+                        <p className="text-xs text-amber-700">
+                          Additional practices: {request.altPractice.join(', ')}
                         </p>
                       ) : null}
                     </div>
@@ -569,6 +583,42 @@ const LawyerVerificationsPage: React.FC = () => {
 
                       {isPending && (
                         <div className="mt-4 space-y-3">
+                          {(request.altChamber ||
+                            (request.altPractice && request.altPractice.length > 0) ||
+                            request.chamberName ||
+                            request.practiceName) && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                              <p className="mb-2 text-sm font-semibold text-slate-800">
+                                Applicant preferences (confirm during approval)
+                              </p>
+                              <ul className="space-y-1 text-xs text-slate-700">
+                                {request.chamberName || request.chamberId ? (
+                                  <li>
+                                    <span className="font-medium">Listed chamber:</span>{' '}
+                                    {request.chamberName || request.chamberId}
+                                  </li>
+                                ) : null}
+                                {request.altChamber ? (
+                                  <li>
+                                    <span className="font-medium">Custom chamber:</span> {request.altChamber}
+                                    <span className="text-amber-800"> (name only — not created on platform)</span>
+                                  </li>
+                                ) : null}
+                                {request.practiceName || request.practiceId ? (
+                                  <li>
+                                    <span className="font-medium">Primary practice:</span>{' '}
+                                    {request.practiceName || request.practiceId}
+                                  </li>
+                                ) : null}
+                                {request.altPractice && request.altPractice.length > 0 ? (
+                                  <li>
+                                    <span className="font-medium">Additional practices:</span>{' '}
+                                    {request.altPractice.join(', ')}
+                                  </li>
+                                ) : null}
+                              </ul>
+                            </div>
+                          )}
                           <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4">
                             <p className="mb-3 text-sm font-semibold text-slate-800">Assignment when approving</p>
                             <div className="grid gap-3 sm:grid-cols-2">
