@@ -70,10 +70,10 @@ const DoctorLawInsightsPage: React.FC = () => {
 
   React.useEffect(() => {
     const insightsRef = collection(db, 'law_insights');
-    const thirtyDaysAgo = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    const sixtyDaysAgo = Timestamp.fromDate(new Date(Date.now() - 60 * 24 * 60 * 60 * 1000));
     const q = query(
       insightsRef,
-      where('createdAt', '>=', thirtyDaysAgo),
+      where('createdAt', '>=', sixtyDaysAgo),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(
@@ -160,7 +160,7 @@ const DoctorLawInsightsPage: React.FC = () => {
         engagementScore: 0,
         externalPlatforms: {},
         createdAt: serverTimestamp(),
-        expiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+        expiresAt: Timestamp.fromDate(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)),
         isActive: true,
       });
       toast.success('Insight posted.');
