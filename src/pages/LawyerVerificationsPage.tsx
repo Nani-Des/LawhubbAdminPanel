@@ -7,9 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   collection,
   doc,
-  documentId,
   getDoc,
-  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -17,7 +15,6 @@ import {
   setDoc,
   Timestamp,
   updateDoc,
-  where,
 } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -27,13 +24,44 @@ import { Chamber, Practice } from '../types';
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, countryNameFromCode } from '../constants/countries';
 import { NA_CHAMBER_NAME, resolveNaChamberId } from '../constants/chamberConstants';
 import {
-  GHANA_REGION_SELECT_OPTIONS,
-  isGhanaCountry,
-  isValidRegionForCountry,
   regionFieldLabel,
 } from '../constants/countryRegions';
+import {
+  applicantHasChamberInfo,
+  chamberDisplayName,
+  collectApplicantPracticeNames,
+  createChamber,
+  ensurePracticeOnChamber,
+  fetchPracticesForChamber,
+  findSimilarChambers,
+  findSimilarPractices,
+  linkPracticeToChamber,
+  practiceDisplayName,
+  suggestChamberIdFromName,
+  suggestPracticeIdFromName,
+} from '../utils/chamberProvisioning';
+import { toTitleCase } from '../utils/stringSimilarity';
 
 type VerificationStatus = 'pending' | 'approved' | 'rejected';
+
+type ChamberAssignMode = 'na' | 'listed' | 'custom_existing' | 'custom_new';
+
+interface CustomPracticeDraft {
+  sourceName: string;
+  mode: 'existing' | 'new';
+  practiceId: string;
+  editedName: string;
+}
+
+interface NewChamberDraft {
+  chamberId: string;
+  chamberName: string;
+  location: string;
+  city: string;
+  countryCode: string;
+  contact: string;
+  email: string;
+}
 
 interface VerificationDoc {
   url?: string;
@@ -77,31 +105,69 @@ interface ApprovalFields {
   chamberId: string;
   practiceId: string;
   title: string;
+  /** ISO country code (international region) */
   region: string;
   countryCode: string;
   nationality: string;
+  chamberAssignMode: ChamberAssignMode;
+  newChamber: NewChamberDraft;
+  customPracticeDrafts: CustomPracticeDraft[];
 }
 
-async function fetchPracticesForChamber(chamberId: string): Promise<Practice[]> {
-  const chamberSnap = await getDoc(doc(db, 'Chamber', chamberId));
-  if (!chamberSnap.exists()) return [];
-  const data = chamberSnap.data() as Chamber;
-  const ids = ((data['Chamber Practice'] || []) as unknown[]).filter((id): id is string => typeof id === 'string');
-  if (!ids.length) return [];
-  const practices: Practice[] = [];
-  for (let i = 0; i < ids.length; i += 10) {
-    const chunk = ids.slice(i, i + 10);
-    const q = query(collection(db, 'Practice'), where(documentId(), 'in', chunk));
-    const snap = await getDocs(q);
-    snap.forEach((d) => {
-      practices.push({
-        id: d.id,
-        'Practice ID': d.id,
-        'Practice Name': (d.data()['Practice Name'] as string) || '',
-      });
-    });
+function defaultNewChamberDraft(request?: VerificationRequest): NewChamberDraft {
+  const rawName = request?.altChamber?.trim() || request?.chamberName?.trim() || '';
+  const fromReq = request?.countryCode?.trim().toUpperCase();
+  const countryCode =
+    fromReq && COUNTRY_OPTIONS.some((c) => c.code === fromReq) ? fromReq : DEFAULT_COUNTRY_CODE;
+  return {
+    chamberId: suggestChamberIdFromName(rawName),
+    chamberName: rawName ? toTitleCase(rawName) : '',
+    location: '',
+    city: '',
+    countryCode,
+    contact: request?.mobile?.trim() || '',
+    email: request?.email?.trim() || '',
+  };
+}
+
+function defaultApprovalFields(request: VerificationRequest): ApprovalFields {
+  const fromReq = request.countryCode?.trim().toUpperCase();
+  const codeOk = fromReq && COUNTRY_OPTIONS.some((c) => c.code === fromReq);
+  const natReq = request.nationality?.trim().toUpperCase();
+  const natOk = natReq && COUNTRY_OPTIONS.some((c) => c.code === natReq);
+  const countryCode = codeOk ? fromReq! : DEFAULT_COUNTRY_CODE;
+  const hasChamber = applicantHasChamberInfo(request);
+  const customNames = collectApplicantPracticeNames(request);
+
+  let chamberAssignMode: ChamberAssignMode = 'listed';
+  if (!hasChamber) {
+    chamberAssignMode = 'na';
+  } else if (request.altChamber?.trim() || (!request.chamberId && request.chamberName?.trim())) {
+    chamberAssignMode = 'custom_new';
+  } else if (request.chamberId) {
+    chamberAssignMode = 'listed';
   }
-  return practices;
+
+  return {
+    chamberId: request.chamberId || '',
+    practiceId: request.practiceId || '',
+    title: 'Select a title',
+    region: natOk ? natReq! : countryCode,
+    countryCode,
+    nationality: natOk ? natReq! : countryCode,
+    chamberAssignMode,
+    newChamber: defaultNewChamberDraft(request),
+    customPracticeDrafts: customNames.map((name) => ({
+      sourceName: name,
+      mode: 'new',
+      practiceId: suggestPracticeIdFromName(name),
+      editedName: toTitleCase(name),
+    })),
+  };
+}
+
+function isValidCountryCode(code: string): boolean {
+  return COUNTRY_OPTIONS.some((c) => c.code === code.trim().toUpperCase());
 }
 
 function hasLawyerVerificationAccess(
@@ -184,26 +250,7 @@ const LawyerVerificationsPage: React.FC = () => {
       const next = { ...prev };
       for (const r of requests) {
         if (r.status === 'pending' && !next[r.uid]) {
-          const fromReq = r.countryCode?.trim().toUpperCase();
-          const codeOk = fromReq && COUNTRY_OPTIONS.some((c) => c.code === fromReq);
-          const natReq = r.nationality?.trim().toUpperCase();
-          const natOk = natReq && COUNTRY_OPTIONS.some((c) => c.code === natReq);
-          const countryCode = codeOk ? fromReq! : DEFAULT_COUNTRY_CODE;
-          const fromRegion = r.region?.trim();
-          const regionDefault =
-            fromRegion && isValidRegionForCountry(countryCode, fromRegion)
-              ? fromRegion
-              : isGhanaCountry(countryCode)
-                ? 'Select a region'
-                : '';
-          next[r.uid] = {
-            chamberId: r.chamberId || '',
-            practiceId: r.practiceId || '',
-            title: 'Select a title',
-            region: regionDefault,
-            countryCode,
-            nationality: natOk ? natReq! : countryCode,
-          };
+          next[r.uid] = defaultApprovalFields(r);
         }
       }
       return next;
@@ -227,7 +274,7 @@ const LawyerVerificationsPage: React.FC = () => {
   useEffect(() => {
     void (async () => {
       for (const r of requests) {
-        if (r.status !== 'pending' || !r.altChamber?.trim()) continue;
+        if (r.status !== 'pending' || applicantHasChamberInfo(r)) continue;
         const current = approvalFields[r.uid];
         if (current?.chamberId) continue;
         const naId = await resolveNaChamberId();
@@ -235,14 +282,8 @@ const LawyerVerificationsPage: React.FC = () => {
         setApprovalFields((prev) => ({
           ...prev,
           [r.uid]: {
-            ...(prev[r.uid] || {
-              chamberId: '',
-              practiceId: r.practiceId || '',
-              title: 'Select a title',
-              region: isGhanaCountry(r.countryCode) ? 'Select a region' : r.region || '',
-              countryCode: r.countryCode || DEFAULT_COUNTRY_CODE,
-              nationality: r.nationality || r.countryCode || DEFAULT_COUNTRY_CODE,
-            }),
+            ...(prev[r.uid] || defaultApprovalFields(r)),
+            chamberAssignMode: 'na',
             chamberId: naId,
           },
         }));
@@ -278,24 +319,21 @@ const LawyerVerificationsPage: React.FC = () => {
 
   useEffect(() => {
     for (const r of requests) {
-      if (r.status !== 'pending' || !r.chamberId) continue;
+      if (r.status !== 'pending') continue;
+      const af = approvalFields[r.uid];
+      if (!af?.chamberId) continue;
       if (practiceOptionsByUid[r.uid] != null || loadingPracticesForUid[r.uid]) continue;
-      void loadPracticeOptionsForUid(r.uid, r.chamberId);
+      if (af.chamberAssignMode === 'custom_new') continue;
+      void loadPracticeOptionsForUid(r.uid, af.chamberId);
     }
-  }, [requests, practiceOptionsByUid, loadingPracticesForUid, loadPracticeOptionsForUid]);
+  }, [requests, approvalFields, practiceOptionsByUid, loadingPracticesForUid, loadPracticeOptionsForUid]);
 
   const handleChamberChange = useCallback(async (uid: string, chamberId: string) => {
     setApprovalFields((prev) => ({
       ...prev,
       [uid]: {
-        ...(prev[uid] || {
-          chamberId: '',
-          practiceId: '',
-          title: 'Select a title',
-          region: isGhanaCountry(DEFAULT_COUNTRY_CODE) ? 'Select a region' : '',
-          countryCode: DEFAULT_COUNTRY_CODE,
-          nationality: DEFAULT_COUNTRY_CODE,
-        }),
+        ...(prev[uid] || defaultApprovalFields(requests.find((r) => r.uid === uid)!)),
+        chamberAssignMode: 'listed',
         chamberId,
         practiceId: '',
       },
@@ -303,7 +341,24 @@ const LawyerVerificationsPage: React.FC = () => {
     setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: [] }));
     if (!chamberId) return;
     await loadPracticeOptionsForUid(uid, chamberId);
-  }, [loadPracticeOptionsForUid]);
+  }, [loadPracticeOptionsForUid, requests]);
+
+  const selectExistingChamberSuggestion = useCallback(
+    async (uid: string, chamberId: string) => {
+      setApprovalFields((prev) => ({
+        ...prev,
+        [uid]: {
+          ...(prev[uid]!),
+          chamberAssignMode: 'custom_existing',
+          chamberId,
+          practiceId: '',
+        },
+      }));
+      setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: [] }));
+      await loadPracticeOptionsForUid(uid, chamberId);
+    },
+    [loadPracticeOptionsForUid]
+  );
 
   const handleApprovalImageChange = useCallback((uid: string, file: File | null) => {
     if (!file) {
@@ -343,15 +398,32 @@ const LawyerVerificationsPage: React.FC = () => {
     if (decision === 'approved') {
       const f = approvalFields[request.uid];
       if (
-        !f?.chamberId ||
         !f?.practiceId ||
         !f?.title ||
         f.title === 'Select a title' ||
         !f?.countryCode ||
         !f?.nationality ||
-        !isValidRegionForCountry(f.countryCode, f.region)
+        !isValidCountryCode(f.region)
       ) {
-        toast.error('Choose chamber, practice, title, nationality, country, and local region before approving.');
+        toast.error('Choose practice, title, nationality, country of practice, and country/region before approving.');
+        return;
+      }
+
+      if (f.chamberAssignMode === 'custom_new') {
+        const nc = f.newChamber;
+        if (
+          !nc.chamberId.trim() ||
+          !nc.chamberName.trim() ||
+          !nc.location.trim() ||
+          !nc.city.trim() ||
+          !nc.contact.trim() ||
+          !nc.countryCode
+        ) {
+          toast.error('Complete all required fields for the new chamber before approving.');
+          return;
+        }
+      } else if (!f.chamberId) {
+        toast.error('Choose or create a chamber before approving.');
         return;
       }
     }
@@ -359,39 +431,77 @@ const LawyerVerificationsPage: React.FC = () => {
     setBusyUid(request.uid);
     let approvedPicUrl: string | undefined;
     try {
+      let resolvedChamberId = '';
+      let provisionSummary = '';
+
       if (decision === 'approved') {
         const f = approvalFields[request.uid]!;
+
+        if (f.chamberAssignMode === 'na') {
+          const naId = await resolveNaChamberId();
+          if (!naId) {
+            toast.error(`Could not find "${NA_CHAMBER_NAME}". Create it in Firestore first.`);
+            return;
+          }
+          resolvedChamberId = naId;
+        } else if (f.chamberAssignMode === 'custom_new') {
+          const nc = f.newChamber;
+          await createChamber({
+            chamberId: nc.chamberId.trim(),
+            chamberName: nc.chamberName.trim(),
+            location: nc.location.trim(),
+            city: nc.city.trim(),
+            countryCode: nc.countryCode,
+            contact: nc.contact.trim(),
+            email: nc.email.trim(),
+          });
+          resolvedChamberId = nc.chamberId.trim();
+          provisionSummary = `Created chamber "${toTitleCase(nc.chamberName)}". `;
+        } else {
+          resolvedChamberId = f.chamberId;
+        }
+
+        for (const draft of f.customPracticeDrafts) {
+          if (draft.mode === 'existing' && draft.practiceId) {
+            await linkPracticeToChamber(resolvedChamberId, draft.practiceId);
+          } else {
+            await ensurePracticeOnChamber(
+              resolvedChamberId,
+              draft.editedName.trim() || draft.sourceName,
+              draft.practiceId.trim()
+            );
+          }
+        }
+
         const picFile = approvalImageFiles[request.uid];
         if (picFile) {
-          const uploaded = await uploadApprovalProfileImage(f.chamberId, request.uid, picFile);
+          const uploaded = await uploadApprovalProfileImage(resolvedChamberId, request.uid, picFile);
           if (!uploaded) {
             toast.error('Failed to upload profile picture. Try again or remove the image.');
             return;
           }
           approvedPicUrl = uploaded;
         }
-      }
 
-      await updateDoc(doc(db, 'LawyerVerificationRequests', request.uid), {
-        status: decision,
-        rejectionReason: decision === 'rejected' ? reason : null,
-        reviewedAt: serverTimestamp(),
-        reviewedBy: currentAdmin.uid,
-        updatedAt: serverTimestamp(),
-      });
+        await updateDoc(doc(db, 'LawyerVerificationRequests', request.uid), {
+          status: decision,
+          rejectionReason: null,
+          reviewedAt: serverTimestamp(),
+          reviewedBy: currentAdmin.uid,
+          updatedAt: serverTimestamp(),
+          approvedChamberId: resolvedChamberId,
+        });
 
-      if (decision === 'approved') {
-        const f = approvalFields[request.uid]!;
         await setDoc(
           doc(db, 'Users', request.uid),
           {
             Role: true,
             Status: true,
             Designation: 'Lawyer',
-            'Chamber ID': f.chamberId,
+            'Chamber ID': resolvedChamberId,
             'Practice ID': f.practiceId,
             Title: f.title,
-            Region: f.region,
+            Region: countryNameFromCode(f.region),
             Country: f.countryCode,
             Nationality: f.nationality,
             Experience: 1,
@@ -415,8 +525,16 @@ const LawyerVerificationsPage: React.FC = () => {
           });
         }
 
-        toast.success('Application approved. User account is now verified as lawyer.');
+        toast.success(`${provisionSummary}Application approved. Lawyer verified.`);
       } else {
+        await updateDoc(doc(db, 'LawyerVerificationRequests', request.uid), {
+          status: decision,
+          rejectionReason: reason,
+          reviewedAt: serverTimestamp(),
+          reviewedBy: currentAdmin.uid,
+          updatedAt: serverTimestamp(),
+        });
+
         await setDoc(
           doc(db, 'Users', request.uid),
           {
@@ -432,7 +550,7 @@ const LawyerVerificationsPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to review verification request:', err);
-      toast.error('Failed to process verification request.');
+      toast.error(err instanceof Error ? err.message : 'Failed to process verification request.');
     } finally {
       setBusyUid(null);
     }
@@ -484,17 +602,24 @@ const LawyerVerificationsPage: React.FC = () => {
                 'Unnamed applicant';
               const isPending = request.status === 'pending';
               const busy = busyUid === request.uid;
-              const af = approvalFields[request.uid] || {
-                chamberId: '',
-                practiceId: '',
-                title: 'Select a title',
-                region: isGhanaCountry(DEFAULT_COUNTRY_CODE) ? 'Select a region' : '',
-                countryCode: DEFAULT_COUNTRY_CODE,
-                nationality: DEFAULT_COUNTRY_CODE,
-              };
+              const af = approvalFields[request.uid] || defaultApprovalFields(request);
               const practiceOpts = practiceOptionsByUid[request.uid] || [];
               const loadingP = loadingPracticesForUid[request.uid];
               const isExpanded = expandedByUid[request.uid] ?? false;
+              const chamberQuery =
+                request.altChamber?.trim() || request.chamberName?.trim() || '';
+              const chamberSuggestions = chamberQuery
+                ? findSimilarChambers(chamberQuery, chambers)
+                : [];
+              const showCustomChamberPanel =
+                af.chamberAssignMode === 'custom_new' || af.chamberAssignMode === 'custom_existing';
+              const draftPracticeOptions = af.customPracticeDrafts
+                .filter((d) => d.mode === 'new' || !practiceOpts.some((p) => p.id === d.practiceId))
+                .map((d) => ({
+                  value: d.practiceId,
+                  label: `(new) ${d.editedName || d.sourceName}`,
+                }));
+              const noChamberInfo = !applicantHasChamberInfo(request);
 
               return (
                 <div key={request.uid} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -646,8 +771,14 @@ const LawyerVerificationsPage: React.FC = () => {
                                     <span className="font-medium">Custom chamber:</span> {request.altChamber}
                                     <span className="text-amber-800">
                                       {' '}
-                                      (assign to {NA_CHAMBER_NAME} on approval)
+                                      (will become an official chamber on approval, or link to a similar one)
                                     </span>
+                                  </li>
+                                ) : null}
+                                {!applicantHasChamberInfo(request) ? (
+                                  <li>
+                                    <span className="font-medium">No chamber provided:</span>{' '}
+                                    will assign to {NA_CHAMBER_NAME}
                                   </li>
                                 ) : null}
                                 {request.practiceName || request.practiceId ? (
@@ -679,23 +810,297 @@ const LawyerVerificationsPage: React.FC = () => {
                           )}
                           <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4">
                             <p className="mb-3 text-sm font-semibold text-slate-800">Assignment when approving</p>
+
+                            {noChamberInfo ? (
+                              <p className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                                No chamber on application — lawyer will be assigned to{' '}
+                                <strong>{NA_CHAMBER_NAME}</strong>.
+                              </p>
+                            ) : null}
+
+                            {showCustomChamberPanel && (
+                              <div className="mb-4 space-y-3 rounded-lg border border-amber-200 bg-white p-3">
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={af.chamberAssignMode === 'custom_new' ? 'primary' : 'outline'}
+                                    onClick={() =>
+                                      setApprovalFields((prev) => ({
+                                        ...prev,
+                                        [request.uid]: {
+                                          ...(prev[request.uid] || af),
+                                          chamberAssignMode: 'custom_new',
+                                          chamberId: '',
+                                        },
+                                      }))
+                                    }
+                                  >
+                                    Create new chamber
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={af.chamberAssignMode === 'custom_existing' ? 'primary' : 'outline'}
+                                    onClick={() =>
+                                      setApprovalFields((prev) => ({
+                                        ...prev,
+                                        [request.uid]: {
+                                          ...(prev[request.uid] || af),
+                                          chamberAssignMode: 'custom_existing',
+                                        },
+                                      }))
+                                    }
+                                  >
+                                    Use existing chamber
+                                  </Button>
+                                </div>
+
+                                {chamberSuggestions.length > 0 && (
+                                  <div>
+                                    <p className="mb-1 text-xs font-medium text-slate-700">
+                                      Similar chambers on platform
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {chamberSuggestions.map(({ item, score }) => (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          onClick={() =>
+                                            void selectExistingChamberSuggestion(request.uid, item.id)
+                                          }
+                                          className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-xs text-teal-900 hover:bg-teal-100"
+                                        >
+                                          {chamberDisplayName(item)} ({Math.round(score * 100)}% match)
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {af.chamberAssignMode === 'custom_new' ? (
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <Input
+                                      label="Chamber name"
+                                      value={af.newChamber.chamberName}
+                                      onChange={(e) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: {
+                                              ...af.newChamber,
+                                              chamberName: e.target.value,
+                                              chamberId: suggestChamberIdFromName(e.target.value),
+                                            },
+                                          },
+                                        }))
+                                      }
+                                    />
+                                    <Input
+                                      label="Chamber ID"
+                                      value={af.newChamber.chamberId}
+                                      onChange={(e) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: { ...af.newChamber, chamberId: e.target.value },
+                                          },
+                                        }))
+                                      }
+                                      helperText="Firestore document ID (same as Chamber ID field)"
+                                    />
+                                    <Input
+                                      label="Location"
+                                      value={af.newChamber.location}
+                                      onChange={(e) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: { ...af.newChamber, location: e.target.value },
+                                          },
+                                        }))
+                                      }
+                                      className="sm:col-span-2"
+                                    />
+                                    <Input
+                                      label="City"
+                                      value={af.newChamber.city}
+                                      onChange={(e) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: { ...af.newChamber, city: e.target.value },
+                                          },
+                                        }))
+                                      }
+                                    />
+                                    <Select
+                                      label="Country"
+                                      value={af.newChamber.countryCode}
+                                      onChange={(value) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: { ...af.newChamber, countryCode: value },
+                                          },
+                                        }))
+                                      }
+                                      options={COUNTRY_OPTIONS.map((c) => ({
+                                        value: c.code,
+                                        label: `${c.name} (${c.code})`,
+                                      }))}
+                                    />
+                                    <Input
+                                      label="Contact"
+                                      value={af.newChamber.contact}
+                                      onChange={(e) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: { ...af.newChamber, contact: e.target.value },
+                                          },
+                                        }))
+                                      }
+                                    />
+                                    <Input
+                                      label="Email"
+                                      value={af.newChamber.email}
+                                      onChange={(e) =>
+                                        setApprovalFields((prev) => ({
+                                          ...prev,
+                                          [request.uid]: {
+                                            ...(prev[request.uid] || af),
+                                            newChamber: { ...af.newChamber, email: e.target.value },
+                                          },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                ) : (
+                                  <Select
+                                    label="Existing chamber"
+                                    value={af.chamberId}
+                                    onChange={(value) =>
+                                      void selectExistingChamberSuggestion(request.uid, value)
+                                    }
+                                    options={[
+                                      { value: '', label: 'Select chamber' },
+                                      ...chambers.map((c) => ({
+                                        value: c.id,
+                                        label: chamberDisplayName(c),
+                                      })),
+                                    ]}
+                                  />
+                                )}
+                              </div>
+                            )}
+
+                            {af.customPracticeDrafts.length > 0 && (
+                              <div className="mb-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                                <p className="text-sm font-medium text-slate-800">Custom practices to add</p>
+                                {af.customPracticeDrafts.map((draft, draftIdx) => {
+                                  const similar = findSimilarPractices(
+                                    draft.editedName || draft.sourceName,
+                                    practiceOpts
+                                  );
+                                  return (
+                                    <div
+                                      key={`${draft.sourceName}-${draftIdx}`}
+                                      className="grid gap-2 rounded border border-slate-100 p-2 sm:grid-cols-2"
+                                    >
+                                      <Input
+                                        label={`Practice name (applicant: ${draft.sourceName})`}
+                                        value={draft.editedName}
+                                        onChange={(e) => {
+                                          const editedName = e.target.value;
+                                          setApprovalFields((prev) => {
+                                            const current = prev[request.uid] || af;
+                                            const drafts = [...current.customPracticeDrafts];
+                                            drafts[draftIdx] = {
+                                              ...drafts[draftIdx],
+                                              editedName,
+                                              mode: 'new',
+                                              practiceId: suggestPracticeIdFromName(editedName),
+                                            };
+                                            return {
+                                              ...prev,
+                                              [request.uid]: { ...current, customPracticeDrafts: drafts },
+                                            };
+                                          });
+                                        }}
+                                      />
+                                      {similar.length > 0 ? (
+                                        <div>
+                                          <p className="mb-1 text-xs text-slate-600">Similar in chamber</p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {similar.map(({ item, score }) => (
+                                              <button
+                                                key={item.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  setApprovalFields((prev) => {
+                                                    const current = prev[request.uid] || af;
+                                                    const drafts = [...current.customPracticeDrafts];
+                                                    drafts[draftIdx] = {
+                                                      ...drafts[draftIdx],
+                                                      mode: 'existing',
+                                                      practiceId: item.id,
+                                                      editedName: practiceDisplayName(item),
+                                                    };
+                                                    return {
+                                                      ...prev,
+                                                      [request.uid]: { ...current, customPracticeDrafts: drafts },
+                                                    };
+                                                  });
+                                                }}
+                                                className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs"
+                                              >
+                                                {practiceDisplayName(item)} ({Math.round(score * 100)}%)
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
                             <div className="grid gap-3 sm:grid-cols-2">
+                              {!showCustomChamberPanel && !noChamberInfo && (
+                                <Select
+                                  label="Chamber"
+                                  value={af.chamberId}
+                                  onChange={(value) => void handleChamberChange(request.uid, value)}
+                                  options={[
+                                    { value: '', label: 'Select chamber' },
+                                    ...chambers.map((c) => ({
+                                      value: c.id,
+                                      label: chamberDisplayName(c),
+                                    })),
+                                  ]}
+                                />
+                              )}
+                              {noChamberInfo && (
+                                <Input
+                                  label="Chamber"
+                                  value={NA_CHAMBER_NAME}
+                                  disabled
+                                />
+                              )}
                               <Select
-                                label="Chamber"
-                                value={af.chamberId}
-                                onChange={(value) => void handleChamberChange(request.uid, value)}
-                                options={[
-                                  { value: '', label: 'Select chamber' },
-                                  ...chambers.map((c) => ({
-                                    value: c.id,
-                                    label: String(c['Chamber Name'] || c.name || c.id),
-                                  })),
-                                ]}
-                              />
-                              <Select
-                                label="Practice"
+                                label="Primary practice for lawyer"
                                 value={af.practiceId}
-                                disabled={!af.chamberId || !!loadingP}
+                                disabled={
+                                  (!af.chamberId && !showCustomChamberPanel && !noChamberInfo) || !!loadingP
+                                }
                                 onChange={(value) =>
                                   setApprovalFields((prev) => ({
                                     ...prev,
@@ -710,14 +1115,15 @@ const LawyerVerificationsPage: React.FC = () => {
                                     value: '',
                                     label: loadingP
                                       ? 'Loading practices…'
-                                      : af.chamberId
+                                      : af.chamberId || noChamberInfo || showCustomChamberPanel
                                         ? 'Select practice'
                                         : 'Select a chamber first',
                                   },
                                   ...practiceOpts.map((p) => ({
                                     value: p.id,
-                                    label: p['Practice Name'] || p['Practice ID'] || p.id,
+                                    label: practiceDisplayName(p),
                                   })),
+                                  ...draftPracticeOptions,
                                 ]}
                               />
                               <Select
@@ -740,7 +1146,6 @@ const LawyerVerificationsPage: React.FC = () => {
                                     [request.uid]: {
                                       ...(prev[request.uid] || af),
                                       countryCode: value,
-                                      region: isGhanaCountry(value) ? 'Select a region' : '',
                                     },
                                   }))
                                 }
@@ -763,34 +1168,20 @@ const LawyerVerificationsPage: React.FC = () => {
                                   label: `${c.name} (${c.code})`,
                                 }))}
                               />
-                              {isGhanaCountry(af.countryCode) ? (
-                                <Select
-                                  label={regionFieldLabel(af.countryCode)}
-                                  value={af.region}
-                                  onChange={(value) =>
-                                    setApprovalFields((prev) => ({
-                                      ...prev,
-                                      [request.uid]: { ...(prev[request.uid] || af), region: value },
-                                    }))
-                                  }
-                                  options={GHANA_REGION_SELECT_OPTIONS.map((r) => ({ value: r, label: r }))}
-                                />
-                              ) : (
-                                <Input
-                                  label={regionFieldLabel(af.countryCode)}
-                                  value={af.region}
-                                  onChange={(e) =>
-                                    setApprovalFields((prev) => ({
-                                      ...prev,
-                                      [request.uid]: {
-                                        ...(prev[request.uid] || af),
-                                        region: e.target.value,
-                                      },
-                                    }))
-                                  }
-                                  placeholder="Enter state, province, or region"
-                                />
-                              )}
+                              <Select
+                                label="Country / Region"
+                                value={af.region}
+                                onChange={(value) =>
+                                  setApprovalFields((prev) => ({
+                                    ...prev,
+                                    [request.uid]: { ...(prev[request.uid] || af), region: value },
+                                  }))
+                                }
+                                options={COUNTRY_OPTIONS.map((c) => ({
+                                  value: c.code,
+                                  label: `${c.name} (${c.code})`,
+                                }))}
+                              />
                               <div className="sm:col-span-2">
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                   Profile picture <span className="font-normal text-slate-500">(optional)</span>

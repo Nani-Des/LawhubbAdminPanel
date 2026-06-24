@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Search, Loader2 } from 'lucide-react';
+import { Building2, Plus, Search, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/layout/Layout';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -8,6 +8,7 @@ import { Chamber } from '../types';
 import { useNavigate } from 'react-router-dom';
 import Input from '../components/ui/Input';
 import { useChamber } from '../contexts/ChamberContext';
+import AddChamberModal from '../components/chamber/AddChamberModal';
 
 // Skeleton Loading Component
 const ChamberCardSkeleton = () => (
@@ -28,7 +29,9 @@ const ChamberSelectionPage: React.FC = () => {
   const [chambers, setChambers] = useState<Chamber[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const navigate = useNavigate();
+  const isSuperAdmin = currentAdmin?.baseRole === 'main_admin';
 
   // Fetch all chambers
   useEffect(() => {
@@ -107,6 +110,17 @@ const ChamberSelectionPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-teal-400 bg-teal-50/40 p-6 text-teal-800 transition hover:border-teal-600 hover:bg-teal-50"
+              >
+                <Plus className="mb-2 h-8 w-8" />
+                <span className="font-semibold">Add new chamber</span>
+                <span className="mt-1 text-xs text-teal-700">Create an official chamber on the platform</span>
+              </button>
+            )}
             {filteredChambers.map((chamber) => (
               <div
                 key={chamber.id}
@@ -143,6 +157,14 @@ const ChamberSelectionPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <AddChamberModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onCreated={(chamberId) => {
+          handleChamberSelect(chamberId);
+        }}
+      />
     </Layout>
   );
 };
