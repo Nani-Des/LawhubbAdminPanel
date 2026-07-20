@@ -201,7 +201,7 @@ const DashboardPage: React.FC = () => {
     labels: ['Your Chamber', 'Platform Average'],
     datasets: [
       {
-        label: 'Practices',
+        label: 'Practice area',
         data: [metrics.totalPractices, platformAverages.totalPractices],
         backgroundColor: ['#374151', '#9ca3af'],
         borderColor: ['#1f2937', '#6b7280'],
@@ -266,7 +266,7 @@ const DashboardPage: React.FC = () => {
               <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200">
                 <div className="flex items-center mb-4">
                   <FolderPlus className="h-6 w-6 text-gray-700" />
-                  <h3 className="ml-2 text-lg font-semibold text-gray-900">Practices</h3>
+                  <h3 className="ml-2 text-lg font-semibold text-gray-900">Practice area</h3>
                 </div>
                 <div className="h-32">
                   <Bar data={practicesData} options={barChartOptions} />
@@ -306,8 +306,8 @@ const DashboardPage: React.FC = () => {
               <>
                 {hasPermission('practices') && (
                   <ActionCard
-                    title="Manage Practices"
-                    description="Manage practices in your chamber"
+                    title="Manage practice areas"
+                    description="Manage practice areas in your chamber"
                     icon={<FolderPlus className="h-6 w-6 text-white" />}
                     path="/practices"
                   />

@@ -136,11 +136,11 @@ const DepartmentForm = React.memo(
 
         {mode === 'select' && (
           <Select
-            label="Select Practice"
+            label="Select practice area"
             value={formData.selectedDepartmentId || ''}
             onChange={(value) => handleInputChange('selectedDepartmentId', value)}
             options={[
-              { value: '', label: 'Choose a practice' },
+              { value: '', label: 'Choose a practice area' },
               ...availableDepartments.map((dept) => ({
                 value: dept['Practice ID'] || dept['Department ID'] || dept.id,
                 label: dept['Practice Name'] || dept['Department Name'] || '',
@@ -154,7 +154,7 @@ const DepartmentForm = React.memo(
         {mode === 'create' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Practice Name"
+              label="Practice area name"
               value={formData['Practice Name'] || formData['Department Name'] || ''}
               onChange={(e) => {
                 handleInputChange('Practice Name', e.target.value);
@@ -165,7 +165,7 @@ const DepartmentForm = React.memo(
               placeholder="e.g., Family Law"
             />
             <Input
-              label="Practice ID"
+              label="Practice area ID"
               value={formData['Practice ID'] || formData['Department ID'] || ''}
               onChange={(e) => {
                 handleInputChange('Practice ID', e.target.value);
@@ -194,10 +194,10 @@ const DepartmentForm = React.memo(
             {isLoading
               ? 'Saving...'
               : selectedDepartment
-              ? 'Update Practice'
+              ? 'Update practice area'
               : mode === 'select'
               ? 'Add to chamber'
-              : 'Create and Add Practice'}
+              : 'Create and add practice area'}
           </Button>
         </div>
       </form>
@@ -249,7 +249,7 @@ const DepartmentsPage: React.FC = () => {
         setAvailableDepartments(unassignedDepts);
       } catch (err) {
         console.error('Failed to fetch departments:', err);
-        toast.error('Failed to load available practices');
+        toast.error('Failed to load available practice areas');
       } finally {
         setIsPageLoading(false);
       }
@@ -310,25 +310,25 @@ const DepartmentsPage: React.FC = () => {
               'Practice ID': practiceId,
               'Practice Name': practiceName,
             } as any);
-            toast.success('Practice updated successfully');
+            toast.success('Practice area updated successfully');
           }
           setIsEditModalOpen(false);
         } else if (mode === 'select') {
           // Add existing department to hospital
           if (!formData.selectedDepartmentId) {
-            toast.error('Please select a practice');
+            toast.error('Please select a practice area');
             setIsLoading(false);
             return;
           }
           console.log('Adding existing department:', formData.selectedDepartmentId);
           await addDepartment(formData.selectedDepartmentId);
-          toast.success('Practice added to chamber');
+          toast.success('Practice area added to chamber');
           setIsAddModalOpen(false);
         } else {
           // Create new practice and add to chamber
           const practiceName = formData['Practice Name'] || formData['Department Name'] || '';
           if (!practiceName) {
-            toast.error('Please enter a practice name');
+            toast.error('Please enter a practice area name');
             setIsLoading(false);
             return;
           }
@@ -345,13 +345,13 @@ const DepartmentsPage: React.FC = () => {
             'Practice ID': newPracticeId,
             'Practice Name': practiceName,
           } as any);
-          toast.success('New practice created and added to chamber');
+          toast.success('New practice area created and added to chamber');
           setIsAddModalOpen(false);
         }
         resetForm();
       } catch (err) {
         console.error('Failed to save department:', err);
-        toast.error('Failed to save practice');
+        toast.error('Failed to save practice area');
       } finally {
         setIsLoading(false);
       }
@@ -376,12 +376,12 @@ const DepartmentsPage: React.FC = () => {
       }
       console.log('Deleting department:', selectedDepartment);
       await deleteDepartment(selectedDepartment);
-      toast.success('Practice removed from chamber');
+      toast.success('Practice area removed from chamber');
       setIsDeleteModalOpen(false);
       setSelectedDepartment(null);
     } catch (err) {
       console.error('Failed to delete department:', err);
-      toast.error('Failed to remove practice');
+      toast.error('Failed to remove practice area');
     } finally {
       setIsLoading(false);
     }
@@ -439,9 +439,9 @@ const DepartmentsPage: React.FC = () => {
         ) : (
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-teal-900">Practices</h1>
+              <h1 className="text-3xl font-bold text-teal-900">Practice area</h1>
               <p className="mt-2 text-base text-gray-700">
-                Manage chamber practices
+                Manage chamber practice areas
               </p>
             </div>
             <Button
@@ -452,7 +452,7 @@ const DepartmentsPage: React.FC = () => {
               className="flex items-center bg-gray-600 hover:bg-gray-700 text-white"
             >
               <FolderPlus className="w-5 h-5 mr-2" />
-              Add Practice
+              Add practice area
             </Button>
           </div>
         )}
@@ -465,7 +465,7 @@ const DepartmentsPage: React.FC = () => {
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-teal-600" />
               <Input
-                placeholder="Search practices..."
+                placeholder="Search practice areas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 bg-gray-100 border-gray-200 text-teal-900 placeholder-teal-600"
@@ -478,7 +478,7 @@ const DepartmentsPage: React.FC = () => {
         {!isPageLoading && filteredDepartments.length === 0 && (
           <div className="text-center py-10">
             <p className="text-teal-600 text-lg">
-              {searchTerm ? 'No practices found matching your search.' : 'No practices available.'}
+              {searchTerm ? 'No practice areas found matching your search.' : 'No practice areas available.'}
             </p>
           </div>
         )}
@@ -489,8 +489,8 @@ const DepartmentsPage: React.FC = () => {
             <Table>
               <Table.Header>
                 <Table.Row>
-                  <Table.Head className="bg-gray-100 text-teal-900">Practice Name</Table.Head>
-                  <Table.Head className="bg-gray-100 text-teal-900">Practice ID</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice area name</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice area ID</Table.Head>
                   <Table.Head className="bg-gray-100 text-teal-900">Actions</Table.Head>
                 </Table.Row>
               </Table.Header>
@@ -506,8 +506,8 @@ const DepartmentsPage: React.FC = () => {
             <Table>
               <Table.Header>
                 <Table.Row>
-                  <Table.Head className="bg-gray-100 text-teal-900">Practice Name</Table.Head>
-                  <Table.Head className="bg-gray-100 text-teal-900">Practice ID</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice area name</Table.Head>
+                  <Table.Head className="bg-gray-100 text-teal-900">Practice area ID</Table.Head>
                   <Table.Head className="bg-gray-100 text-teal-900">Actions</Table.Head>
                 </Table.Row>
               </Table.Header>
@@ -590,7 +590,7 @@ const DepartmentsPage: React.FC = () => {
         <Modal
           isOpen={isAddModalOpen}
           onClose={closeAddModal}
-          title="Add Practice"
+          title="Add practice area"
           size="lg"
         >
           {isPageLoading ? (
@@ -614,7 +614,7 @@ const DepartmentsPage: React.FC = () => {
         <Modal
           isOpen={isEditModalOpen}
           onClose={closeEditModal}
-          title="Edit Practice"
+          title="Edit practice area"
           size="lg"
         >
           {isPageLoading ? (
@@ -623,7 +623,7 @@ const DepartmentsPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  label="Practice Name"
+                  label="Practice area name"
                   value={formData['Practice Name'] || formData['Department Name'] || ''}
                   onChange={(e) => setFormData((prev: any) => ({
                     ...prev,
@@ -635,7 +635,7 @@ const DepartmentsPage: React.FC = () => {
                   placeholder="e.g., Family Law"
                 />
                 <Input
-                  label="Practice ID"
+                  label="Practice area ID"
                   value={formData['Practice ID'] || formData['Department ID'] || ''}
                   onChange={(e) => setFormData((prev: any) => ({
                     ...prev,
@@ -661,7 +661,7 @@ const DepartmentsPage: React.FC = () => {
                   disabled={isLoading}
                   className="bg-gray-600 hover:bg-gray-700 text-white"
                 >
-                  {isLoading ? 'Saving...' : 'Update Practice'}
+                  {isLoading ? 'Saving...' : 'Update practice area'}
                 </Button>
               </div>
             </form>
@@ -672,12 +672,12 @@ const DepartmentsPage: React.FC = () => {
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={closeDeleteModal}
-          title="Remove Practice"
+          title="Remove practice area"
           size="md"
         >
           <div className="space-y-6">
             <p className="text-gray-700">
-              Are you sure you want to remove the practice "
+              Are you sure you want to remove the practice area "
               {((departments.find((d) => d.id === selectedDepartment) as any)?.['Practice Name'] || (departments.find((d) => d.id === selectedDepartment) as any)?.['Department Name'] || '')}" from the
               chamber? This action cannot be undone.
             </p>

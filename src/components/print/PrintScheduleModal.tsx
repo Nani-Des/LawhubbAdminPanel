@@ -342,7 +342,7 @@ const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
                   <span>${doctor.Email || 'N/A'}</span>
                 </div>
                 <div class="doctor-info-item">
-                  <strong>Practice:</strong>
+                  <strong>Practice area:</strong>
                   <span>${departments.find(d => d.id === doctor['Practice ID'] || d.id === doctor['Department ID'])?.['Practice Name'] || departments.find(d => d.id === doctor['Department ID'])?.['Department Name'] || 'N/A'}</span>
                 </div>
                 <div class="doctor-info-item">
@@ -432,7 +432,7 @@ const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
             onChange={setPrintType}
             options={[
               { value: 'selected', label: 'Selected members' },
-              { value: 'department', label: 'Practice' },
+              { value: 'department', label: 'Practice area' },
               { value: 'all', label: 'All members' }
             ]}
             className="bg-gray-50 border-gray-200 text-gray-900"

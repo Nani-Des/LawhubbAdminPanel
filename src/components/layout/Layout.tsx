@@ -126,7 +126,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // All navigation items with their permission keys
   const allNavItems = [
     { label: 'Dashboard', path: '/', icon: <LayoutDashboard className="w-5 h-5" />, permission: 'dashboard' },
-    { label: 'Practices', path: '/practices', icon: <FolderPlus className="w-5 h-5" />, permission: 'practices' },
+    { label: 'Practice area', path: '/practices', icon: <FolderPlus className="w-5 h-5" />, permission: 'practices' },
     { label: 'Attachments', path: '/attachments', icon: <FileText className="w-5 h-5" />, permission: 'attachments' },
     { label: 'Members', path: '/lawyers', icon: <CircleUser className="w-5 h-5" />, permission: 'lawyers' },
     { label: 'Shift Schedule', path: '/shift-schedule', icon: <Clock className="w-5 h-5" />, permission: 'shift_schedule' },

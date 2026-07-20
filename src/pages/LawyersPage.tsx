@@ -299,7 +299,7 @@ const LawyersPage: React.FC = () => {
 
   // Available permissions for admin assignment
   const availablePermissions = [
-    { key: "departments", label: "Practices" },
+    { key: "departments", label: "Practice area" },
     { key: "medical_records", label: "Attachments" },
     { key: "lawyers", label: "Members" },
     { key: "shift_schedule", label: "Shift Schedule" },
@@ -591,7 +591,7 @@ const LawyersPage: React.FC = () => {
     let createdAuthUser: ProvisionedAuthUser | null = null;
     try {
       if (!formData["Practice ID"]) {
-        toast.error("Please select a practice");
+        toast.error("Please select a practice area");
         return;
       }
 
@@ -736,7 +736,7 @@ const LawyersPage: React.FC = () => {
         // Check if Practice ID is provided
         if (!lawyerData["Practice ID"]) {
           failedCount++;
-          errors.push(`${lawyerData.Email}: Practice ID is required`);
+          errors.push(`${lawyerData.Email}: Practice area ID is required`);
           continue;
         }
 
@@ -1052,7 +1052,7 @@ const LawyersPage: React.FC = () => {
             <SearchSkeleton />
           ) : (
             <Input
-              placeholder="Search by name or practice..."
+              placeholder="Search by name or practice area..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-md bg-gray-100 border-gray-200 text-gray-900 placeholder-gray-500"
@@ -1112,7 +1112,7 @@ const LawyersPage: React.FC = () => {
                     </p>
                     {(user as any)["Alt Practice"]?.length > 0 ? (
                       <p className="text-xs text-gray-600">
-                        Additional: {((user as any)["Alt Practice"] as string[]).join(", ")}
+                        Additional practice areas: {((user as any)["Alt Practice"] as string[]).join(", ")}
                       </p>
                     ) : null}
                     {(user as any)["Alt Chamber"] ? (
@@ -1433,7 +1433,7 @@ const LawyersPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Select
-                      label="Practice"
+                      label="Practice area"
                       value={formData["Practice ID"]}
                       onChange={(value) => {
                         console.log("Practice selected:", value);
@@ -1443,9 +1443,9 @@ const LawyersPage: React.FC = () => {
                         departments.length > 0
                           ? departments.map((dept) => ({
                               value: dept["Practice ID"] || dept["Department ID"] || dept.id,
-                              label: dept["Practice Name"] || dept["Department Name"] || "Unnamed Practice",
+                              label: dept["Practice Name"] || dept["Department Name"] || "Unnamed practice area",
                             }))
-                          : [{ value: "", label: "No practices available" }]
+                          : [{ value: "", label: "No practice areas available" }]
                       }
                       required
                       className="bg-gray-50 border-gray-200 text-gray-900"
@@ -1510,7 +1510,7 @@ const LawyersPage: React.FC = () => {
                   </div>
                   {departments.length === 0 && (
                     <p className="text-sm text-red-600">
-                      No practices available. Please add practices first.
+                      No practice areas available. Please add practice areas first.
                     </p>
                   )}
                   <Button
@@ -1676,19 +1676,19 @@ const LawyersPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
-                  label="Practice"
+                  label="Practice area"
                   value={formData["Practice ID"]}
                   onChange={(value) => {
-                    console.log("Practice selected:", value);
+                    console.log("Practice area selected:", value);
                     setFormData({ ...formData, "Practice ID": value });
                   }}
                   options={
                     departments.length > 0
                       ? departments.map((dept) => ({
                           value: dept["Practice ID"] || dept["Department ID"] || dept.id,
-                          label: dept["Practice Name"] || dept["Department Name"] || "Unnamed Practice",
+                          label: dept["Practice Name"] || dept["Department Name"] || "Unnamed practice area",
                         }))
-                      : [{ value: "", label: "No practices available" }]
+                      : [{ value: "", label: "No practice areas available" }]
                   }
                   required
                   className="bg-gray-50 border-gray-200 text-gray-900"
@@ -1753,7 +1753,7 @@ const LawyersPage: React.FC = () => {
               </div>
               {departments.length === 0 && (
                 <p className="text-sm text-red-600">
-                  No practices available. Please add practices first.
+                  No practice areas available. Please add practice areas first.
                 </p>
               )}
               <Button

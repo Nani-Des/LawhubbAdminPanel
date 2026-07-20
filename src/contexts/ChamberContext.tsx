@@ -221,7 +221,7 @@ export const ChamberProvider: React.FC<{ children: React.ReactNode }> = ({ child
           },
           (err) => {
             console.error('Practice fetch error:', err);
-            setError('Failed to load practices');
+            setError('Failed to load practice areas');
           }
         );
         unsubscribers.push(unsub);
