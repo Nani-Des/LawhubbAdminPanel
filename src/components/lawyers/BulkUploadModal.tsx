@@ -114,7 +114,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       { Column: 'Mobile Number*', Description: 'Required. Contact number', Valid_Values: 'Any format' },
       { Column: 'Title*', Description: 'Required. Title prefix', Valid_Values: Title.filter(t => t !== 'Select a title').join(', ') },
       { Column: 'Designation*', Description: 'Required. Job title/designation', Valid_Values: 'Any text' },
-      { Column: 'Practice Name*', Description: 'Required. Practice area name (must match existing practice area)', Valid_Values: departments.map(d => d['Practice Name'] || d['Department Name'] || '').filter(Boolean).join(', ') },
+      { Column: 'Practice Name*', Description: 'Required. Practice Area Name (must match existing Practice Area)', Valid_Values: departments.map(d => d['Practice Name'] || d['Department Name'] || '').filter(Boolean).join(', ') },
       { Column: 'Region*', Description: 'Required. Geographic region', Valid_Values: Region.filter(r => r !== 'Select a region').join(', ') },
       { Column: 'Profile Picture URL', Description: 'Optional. URL to profile picture', Valid_Values: 'Valid URL' },
       { Column: 'Active Days', Description: 'Required. Number of consecutive working days', Valid_Values: 'Positive number (e.g., 5)' },
@@ -203,9 +203,9 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                 }),
                 new TableRow({
                   children: [
-                    new TableCell({ children: [new Paragraph("Practice area name*")] }),
-                    new TableCell({ children: [new Paragraph("The practice area the member belongs to. Must exactly match an existing practice area name.")] }),
-                    new TableCell({ children: [new Paragraph(departments.map(d => d['Practice Name'] || d['Department Name'] || '').filter(Boolean).join(', ') || 'Available practice areas from your system')] }),
+                    new TableCell({ children: [new Paragraph("Practice Area Name*")] }),
+                    new TableCell({ children: [new Paragraph("The Practice Area the member belongs to. Must exactly match an existing Practice Area name.")] }),
+                    new TableCell({ children: [new Paragraph(departments.map(d => d['Practice Name'] || d['Department Name'] || '').filter(Boolean).join(', ') || 'Available Practice Areas from your system')] }),
                   ],
                 }),
                 new TableRow({
@@ -290,7 +290,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
               spacing: { after: 100 },
             }),
             new Paragraph({
-              text: "• Practice area names must exactly match existing practice areas in the system.",
+              text: "• Practice Area Names must exactly match existing Practice Areas in the system.",
               spacing: { after: 100 },
             }),
             new Paragraph({
@@ -338,7 +338,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     if (!lawyer['Mobile Number']?.trim()) errors.push('Mobile Number is required');
     if (!lawyer.Title || lawyer.Title === 'Select a title') errors.push('Title is required');
     if (!lawyer.Designation?.trim()) errors.push('Designation is required');
-    if (!lawyer['Practice ID']) errors.push('Practice area is required');
+    if (!lawyer['Practice ID']) errors.push('Practice Area is required');
     if (!lawyer.Region || lawyer.Region === 'Select a region') errors.push('Region is required');
     
     // Validate schedule fields
@@ -693,7 +693,7 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                     <Table.Head className="min-w-[130px]">Mobile</Table.Head>
                     <Table.Head className="min-w-[100px]">Title</Table.Head>
                     <Table.Head className="min-w-[150px]">Designation</Table.Head>
-                    <Table.Head className="min-w-[200px]">Practice area</Table.Head>
+                    <Table.Head className="min-w-[200px]">Practice Area</Table.Head>
                     <Table.Head className="min-w-[140px]">Region</Table.Head>
                     <Table.Head className="min-w-[100px]">Active Days</Table.Head>
                     <Table.Head className="min-w-[100px]">Off Days</Table.Head>
@@ -779,10 +779,10 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                             className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             style={{ minWidth: '200px' }}
                           >
-                            <option value="">Select practice area</option>
+                            <option value="">Select Practice Area</option>
                             {departments.map(d => {
                               const practiceId = d.id || d['Practice ID'] || d['Department ID'];
-                              const practiceName = d['Practice Name'] || d['Department Name'] || 'Unnamed practice area';
+                              const practiceName = d['Practice Name'] || d['Department Name'] || 'Unnamed Practice Area';
                               return (
                                 <option key={practiceId} value={practiceId} title={practiceName}>
                                   {practiceName}

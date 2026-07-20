@@ -195,7 +195,7 @@ const AddChamberModal: React.FC<AddChamberModalProps> = ({
 
         <div>
           <p className="mb-2 text-sm font-medium text-slate-800">
-            Initial practice areas <span className="font-normal text-slate-500">(optional)</span>
+            Initial Practice Areas <span className="font-normal text-slate-500">(optional)</span>
           </p>
           <div className="space-y-2">
             {form.practiceNames.map((name, idx) => (
@@ -207,7 +207,7 @@ const AddChamberModal: React.FC<AddChamberModalProps> = ({
                     next[idx] = e.target.value;
                     setForm((prev) => ({ ...prev, practiceNames: next }));
                   }}
-                  placeholder="Practice area name"
+                  placeholder="Practice Area Name"
                 />
                 {form.practiceNames.length > 1 ? (
                   <Button
@@ -233,7 +233,7 @@ const AddChamberModal: React.FC<AddChamberModalProps> = ({
                 setForm((prev) => ({ ...prev, practiceNames: [...prev.practiceNames, ''] }))
               }
             >
-              Add practice area
+              Add Practice Area
             </Button>
           </div>
         </div>

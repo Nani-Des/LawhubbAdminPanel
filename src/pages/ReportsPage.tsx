@@ -329,7 +329,7 @@ const ReportsPage: React.FC = () => {
       labels: chambers.map((c) => c['Chamber Name'] || c.id),
       datasets: [
         {
-          label: 'Practice areas per Chamber',
+          label: 'Practice Areas per Chamber',
           data: chambers.map((c) => {
             const practices = (c['Chamber Practice'] as string[]) || [];
             return practices.length;
@@ -409,14 +409,14 @@ const ReportsPage: React.FC = () => {
     
     switch (selectedReportType) {
       case 'chamber':
-        csvContent = 'Chamber Name,Location,City,Region,Contact,Practice areas Count\n';
+        csvContent = 'Chamber Name,Location,City,Region,Contact,Practice Areas Count\n';
         filteredData.forEach((chamber: Chamber) => {
           const practices = (chamber['Chamber Practice'] as string[]) || [];
           csvContent += `"${chamber['Chamber Name'] || ''}","${chamber.Location || ''}","${chamber.City || ''}","${chamber.Region || ''}","${chamber.Contact || ''}","${practices.length}"\n`;
         });
         break;
       case 'practice':
-        csvContent = 'Practice area ID,Practice area name\n';
+        csvContent = 'Practice Area ID,Practice Area Name\n';
         filteredData.forEach((practice: Practice) => {
           csvContent += `"${practice['Practice ID'] || practice.id}","${practice['Practice Name'] || ''}"\n`;
         });
@@ -499,7 +499,7 @@ const ReportsPage: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Platform Reports</h1>
             <p className="mt-2 text-base text-gray-700">
-              Generate comprehensive reports on chambers, practice areas, users, and library resources
+              Generate comprehensive reports on chambers, Practice Areas, users, and library resources
             </p>
           </div>
           <div className="flex gap-2">
@@ -545,7 +545,7 @@ const ReportsPage: React.FC = () => {
               { value: 'summary', label: 'Platform Summary' },
               { value: 'platform', label: 'All Chambers' },
               { value: 'chamber', label: 'Chamber Details' },
-              { value: 'practice', label: 'Practice area report' },
+              { value: 'practice', label: 'Practice Area Report' },
               { value: 'users', label: 'Users/Staff Report' },
               { value: 'library', label: 'Library Report' },
             ]}
@@ -590,11 +590,11 @@ const ReportsPage: React.FC = () => {
               )}
               {(selectedReportType === 'practice' || selectedReportType === 'users') && (
                 <Select
-                  label="Practice area"
+                  label="Practice Area"
                   value={filters.practiceId}
                   onChange={(value) => handleFilterChange('practiceId', value)}
                   options={[
-                    { value: '', label: 'All practice areas' },
+                    { value: '', label: 'All Practice Areas' },
                     ...allPractices.map((practice) => ({
                       value: practice.id,
                       label: practice['Practice Name'] || practice.id,
@@ -649,7 +649,7 @@ const ReportsPage: React.FC = () => {
               <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total practice areas</p>
+                    <p className="text-sm text-gray-600">Total Practice Areas</p>
                     <p className="text-3xl font-bold text-gray-900">{summaryStats.totalPractices}</p>
                   </div>
                   <FileText className="h-12 w-12 text-gray-600 opacity-50" />
@@ -794,7 +794,7 @@ const ReportsPage: React.FC = () => {
                 </div>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow duration-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Practice areas per Chamber (Top 10)</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Practice Areas per Chamber (Top 10)</h3>
                 <div className="h-64">
                   <Bar data={getPracticesByChamberChartData()} options={{ maintainAspectRatio: false }} />
                 </div>
@@ -816,7 +816,7 @@ const ReportsPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900">
                 {selectedReportType === 'platform' && 'All Chambers'}
                 {selectedReportType === 'chamber' && 'Chamber Details'}
-                {selectedReportType === 'practice' && 'Practice area report'}
+                {selectedReportType === 'practice' && 'Practice Area Report'}
                 {selectedReportType === 'users' && 'Users/Staff Report'}
                 {selectedReportType === 'library' && 'Library Report'}
               </h3>
@@ -835,7 +835,7 @@ const ReportsPage: React.FC = () => {
                       <Table.Head>City</Table.Head>
                       <Table.Head>Region</Table.Head>
                       <Table.Head>Contact</Table.Head>
-                      <Table.Head>Practice areas</Table.Head>
+                      <Table.Head>Practice Areas</Table.Head>
                       <Table.Head>Rating</Table.Head>
                     </Table.Row>
                   </Table.Header>
@@ -863,8 +863,8 @@ const ReportsPage: React.FC = () => {
                 <Table>
                   <Table.Header>
                     <Table.Row>
-                      <Table.Head>Practice area ID</Table.Head>
-                      <Table.Head>Practice area name</Table.Head>
+                      <Table.Head>Practice Area ID</Table.Head>
+                      <Table.Head>Practice Area Name</Table.Head>
                     </Table.Row>
                   </Table.Header>
                   <Table.Body>
@@ -885,7 +885,7 @@ const ReportsPage: React.FC = () => {
                       <Table.Head>Email</Table.Head>
                       <Table.Head>Title</Table.Head>
                       <Table.Head>Chamber</Table.Head>
-                      <Table.Head>Practice area</Table.Head>
+                      <Table.Head>Practice Area</Table.Head>
                       <Table.Head>Region</Table.Head>
                       <Table.Head>Status</Table.Head>
                       <Table.Head>Created At</Table.Head>

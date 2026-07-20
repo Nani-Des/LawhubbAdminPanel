@@ -265,7 +265,7 @@ const LawyerVerificationsPage: React.FC = () => {
       setPracticeOptionsByUid((prev) => ({ ...prev, [uid]: practices }));
     } catch (e) {
       console.error(e);
-      toast.error('Could not load practice areas for this chamber.');
+      toast.error('Could not load Practice Areas for this chamber.');
     } finally {
       setLoadingPracticesForUid((prev) => ({ ...prev, [uid]: false }));
     }
@@ -405,7 +405,7 @@ const LawyerVerificationsPage: React.FC = () => {
         !f?.nationality ||
         !isValidCountryCode(f.region)
       ) {
-        toast.error('Choose practice area, title, nationality, country of practice, and country/region before approving.');
+        toast.error('Choose Practice Area, title, nationality, country of practice, and country/region before approving.');
         return;
       }
 
@@ -655,12 +655,12 @@ const LawyerVerificationsPage: React.FC = () => {
                       ) : null}
                       {request.practiceName || request.practiceId ? (
                         <p className="text-xs text-slate-500">
-                          Primary practice area: {request.practiceName || request.practiceId}
+                          Primary Practice Area: {request.practiceName || request.practiceId}
                         </p>
                       ) : null}
                       {request.altPractice && request.altPractice.length > 0 ? (
                         <p className="text-xs text-amber-700">
-                          Additional practice areas: {request.altPractice.join(', ')}
+                          Additional Practice Areas: {request.altPractice.join(', ')}
                         </p>
                       ) : null}
                     </div>
@@ -783,7 +783,7 @@ const LawyerVerificationsPage: React.FC = () => {
                                 ) : null}
                                 {request.practiceName || request.practiceId ? (
                                   <li>
-                                    <span className="font-medium">Primary practice area:</span>{' '}
+                                    <span className="font-medium">Primary Practice Area:</span>{' '}
                                     {request.practiceName || request.practiceId}
                                   </li>
                                 ) : null}
@@ -801,7 +801,7 @@ const LawyerVerificationsPage: React.FC = () => {
                                 ) : null}
                                 {request.altPractice && request.altPractice.length > 0 ? (
                                   <li>
-                                    <span className="font-medium">Additional practice areas:</span>{' '}
+                                    <span className="font-medium">Additional Practice Areas:</span>{' '}
                                     {request.altPractice.join(', ')}
                                   </li>
                                 ) : null}
@@ -1003,7 +1003,7 @@ const LawyerVerificationsPage: React.FC = () => {
 
                             {af.customPracticeDrafts.length > 0 && (
                               <div className="mb-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                                <p className="text-sm font-medium text-slate-800">Custom practice areas to add</p>
+                                <p className="text-sm font-medium text-slate-800">Custom Practice Areas to add</p>
                                 {af.customPracticeDrafts.map((draft, draftIdx) => {
                                   const similar = findSimilarPractices(
                                     draft.editedName || draft.sourceName,
@@ -1015,7 +1015,7 @@ const LawyerVerificationsPage: React.FC = () => {
                                       className="grid gap-2 rounded border border-slate-100 p-2 sm:grid-cols-2"
                                     >
                                       <Input
-                                        label={`Practice area name (applicant: ${draft.sourceName})`}
+                                        label={`Practice Area Name (applicant: ${draft.sourceName})`}
                                         value={draft.editedName}
                                         onChange={(e) => {
                                           const editedName = e.target.value;
@@ -1096,7 +1096,7 @@ const LawyerVerificationsPage: React.FC = () => {
                                 />
                               )}
                               <Select
-                                label="Primary practice area for lawyer"
+                                label="Primary Practice Area for lawyer"
                                 value={af.practiceId}
                                 disabled={
                                   (!af.chamberId && !showCustomChamberPanel && !noChamberInfo) || !!loadingP
@@ -1114,9 +1114,9 @@ const LawyerVerificationsPage: React.FC = () => {
                                   {
                                     value: '',
                                     label: loadingP
-                                      ? 'Loading practice areas…'
+                                      ? 'Loading Practice Areas…'
                                       : af.chamberId || noChamberInfo || showCustomChamberPanel
-                                        ? 'Select practice area'
+                                        ? 'Select Practice Area'
                                         : 'Select a chamber first',
                                   },
                                   ...practiceOpts.map((p) => ({
@@ -1205,7 +1205,7 @@ const LawyerVerificationsPage: React.FC = () => {
                             </div>
                             {af.chamberId && !loadingP && practiceOpts.length === 0 ? (
                               <p className="mt-2 text-xs text-amber-800">
-                                This chamber has no practice areas linked yet. Add practice areas under chamber settings before
+                                This chamber has no Practice Areas linked yet. Add Practice Areas under chamber settings before
                                 approving.
                               </p>
                             ) : null}
