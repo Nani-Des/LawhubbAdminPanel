@@ -37,7 +37,7 @@ ChartJS.register(
 );
 
 // Report types
-type ReportType = 'platform' | 'chamber' | 'practice' | 'users' | 'library' | 'summary';
+type ReportType = 'platform' | 'chamber' | 'practice' | 'users' | 'lawyers' | 'library' | 'summary';
 
 interface ReportFilters {
   startDate: string;
@@ -46,6 +46,12 @@ interface ReportFilters {
   practiceId: string;
   status: string;
   region: string;
+  /** '' | 'lawyer' | 'client' — used when report type is users */
+  accountType: string;
+}
+
+function isLawyerUser(user: UserType): boolean {
+  return user.Role === true || String(user.Designation || '').toLowerCase() === 'lawyer';
 }
 
 interface LibraryItem {
@@ -69,6 +75,7 @@ const ReportsPage: React.FC = () => {
     practiceId: '',
     status: '',
     region: '',
+    accountType: '',
   });
   
   // Data states
@@ -170,7 +177,16 @@ const ReportsPage: React.FC = () => {
         data = practices;
         break;
       case 'users':
+      case 'lawyers':
         data = allUsers.filter((user) => {
+          const lawyer = isLawyerUser(user);
+          if (selectedReportType === 'lawyers' && !lawyer) return false;
+          if (selectedReportType === 'users') {
+            if (filters.accountType === 'lawyer' && !lawyer) return false;
+            if (filters.accountType === 'client' && lawyer) return false;
+            // Default "App Users" report excludes lawyers so lists stay separate
+            if (!filters.accountType && lawyer) return false;
+          }
           if (filters.chamberId && user['Chamber ID'] !== filters.chamberId) return false;
           if (filters.practiceId && user['Practice ID'] !== filters.practiceId) return false;
           if (filters.status && user.Status !== (filters.status === 'active')) return false;
@@ -207,9 +223,18 @@ const ReportsPage: React.FC = () => {
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
-    const activeUsers = allUsers.filter((u) => u.Status === true).length;
-    const inactiveUsers = allUsers.length - activeUsers;
-    const usersByRegion = allUsers.reduce((acc, user) => {
+    const lawyers = allUsers.filter((u) => isLawyerUser(u));
+    const clients = allUsers.filter((u) => !isLawyerUser(u));
+    const activeUsers = clients.filter((u) => u.Status === true).length;
+    const inactiveUsers = clients.length - activeUsers;
+    const activeLawyers = lawyers.filter((u) => u.Status === true).length;
+    const inactiveLawyers = lawyers.length - activeLawyers;
+    const usersByRegion = clients.reduce((acc, user) => {
+      const region = user.Region || 'Unknown';
+      acc[region] = (acc[region] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const lawyersByRegion = lawyers.reduce((acc, user) => {
       const region = user.Region || 'Unknown';
       acc[region] = (acc[region] || 0) + 1;
       return acc;
@@ -281,11 +306,16 @@ const ReportsPage: React.FC = () => {
     return {
       totalChambers: allChambers.length,
       totalPractices: allPractices.length,
-      totalUsers: allUsers.length,
+      totalAccounts: allUsers.length,
+      totalUsers: clients.length,
+      totalLawyers: lawyers.length,
       activeUsers,
       inactiveUsers,
+      activeLawyers,
+      inactiveLawyers,
       totalLibraryItems: libraryItems.length,
       usersByRegion,
+      lawyersByRegion,
       practicesByChamber,
       libraryByCategory,
       signUpRate7Days: Math.round(signUpRate7Days * 10) / 10,
@@ -360,12 +390,22 @@ const ReportsPage: React.FC = () => {
 
   const getUsersStatusChartData = () => {
     return {
-      labels: ['Active Users', 'Inactive Users'],
+      labels: ['Active App Users', 'Inactive App Users', 'Active Lawyers', 'Inactive Lawyers'],
       datasets: [
         {
-          label: 'User Status',
-          data: [summaryStats.activeUsers, summaryStats.inactiveUsers],
-          backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(239, 68, 68, 0.8)'],
+          label: 'Account Status',
+          data: [
+            summaryStats.activeUsers,
+            summaryStats.inactiveUsers,
+            summaryStats.activeLawyers,
+            summaryStats.inactiveLawyers,
+          ],
+          backgroundColor: [
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(239, 68, 68, 0.8)',
+            'rgba(13, 148, 136, 0.8)',
+            'rgba(251, 146, 60, 0.8)',
+          ],
         },
       ],
     };
@@ -422,10 +462,12 @@ const ReportsPage: React.FC = () => {
         });
         break;
       case 'users':
-        csvContent = 'User ID,First Name,Last Name,Email,Chamber ID,Practice ID,Title,Status,Region,Created At\n';
+      case 'lawyers':
+        csvContent = 'User ID,First Name,Last Name,Email,Account Type,Chamber ID,Practice ID,Title,Status,Region,Created At\n';
         filteredData.forEach((user: UserType) => {
           const createdAt = user.CreatedAt?.toDate().toLocaleDateString() || '';
-          csvContent += `"${user['User ID'] || user.id}","${user.Fname || ''}","${user.Lname || ''}","${user.Email || ''}","${user['Chamber ID'] || ''}","${user['Practice ID'] || ''}","${user.Title || ''}","${user.Status ? 'Active' : 'Inactive'}","${user.Region || ''}","${createdAt}"\n`;
+          const accountType = isLawyerUser(user) ? 'Lawyer' : 'App User';
+          csvContent += `"${user['User ID'] || user.id}","${user.Fname || ''}","${user.Lname || ''}","${user.Email || ''}","${accountType}","${user['Chamber ID'] || ''}","${user['Practice ID'] || ''}","${user.Title || ''}","${user.Status ? 'Active' : 'Inactive'}","${user.Region || ''}","${createdAt}"\n`;
         });
         break;
       case 'library':
@@ -469,6 +511,7 @@ const ReportsPage: React.FC = () => {
       practiceId: '',
       status: '',
       region: '',
+      accountType: '',
     });
   };
 
@@ -546,8 +589,9 @@ const ReportsPage: React.FC = () => {
               { value: 'platform', label: 'All Chambers' },
               { value: 'chamber', label: 'Chamber Details' },
               { value: 'practice', label: 'Practice Report' },
-              { value: 'users', label: 'Users/Staff Report' },
-              { value: 'library', label: 'Library Report' },
+              { value: 'users', label: 'App Users Report' },
+              { value: 'lawyers', label: 'Lawyers Report' },
+              { value: 'library', label: 'Library / Bookshop Report' },
             ]}
           />
         </div>
@@ -574,7 +618,9 @@ const ReportsPage: React.FC = () => {
                 value={filters.endDate}
                 onChange={(e) => handleFilterChange('endDate', e.target.value)}
               />
-              {(selectedReportType === 'chamber' || selectedReportType === 'users') && (
+              {(selectedReportType === 'chamber' ||
+                selectedReportType === 'users' ||
+                selectedReportType === 'lawyers') && (
                 <Select
                   label="Chamber"
                   value={filters.chamberId}
@@ -588,7 +634,9 @@ const ReportsPage: React.FC = () => {
                   ]}
                 />
               )}
-              {(selectedReportType === 'practice' || selectedReportType === 'users') && (
+              {(selectedReportType === 'practice' ||
+                selectedReportType === 'users' ||
+                selectedReportType === 'lawyers') && (
                 <Select
                   label="Practice"
                   value={filters.practiceId}
@@ -602,7 +650,7 @@ const ReportsPage: React.FC = () => {
                   ]}
                 />
               )}
-              {selectedReportType === 'users' && (
+              {(selectedReportType === 'users' || selectedReportType === 'lawyers') && (
                 <Select
                   label="Status"
                   value={filters.status}
@@ -614,7 +662,21 @@ const ReportsPage: React.FC = () => {
                   ]}
                 />
               )}
-              {(selectedReportType === 'users' || selectedReportType === 'chamber') && (
+              {selectedReportType === 'users' && (
+                <Select
+                  label="Account type"
+                  value={filters.accountType}
+                  onChange={(value) => handleFilterChange('accountType', value)}
+                  options={[
+                    { value: '', label: 'App users only (default)' },
+                    { value: 'client', label: 'App users only' },
+                    { value: 'lawyer', label: 'Lawyers only' },
+                  ]}
+                />
+              )}
+              {(selectedReportType === 'users' ||
+                selectedReportType === 'lawyers' ||
+                selectedReportType === 'chamber') && (
                 <Select
                   label="Region"
                   value={filters.region}
@@ -636,7 +698,7 @@ const ReportsPage: React.FC = () => {
         {selectedReportType === 'summary' && (
           <div className="space-y-6">
             {/* Summary Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -658,8 +720,11 @@ const ReportsPage: React.FC = () => {
               <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total Users</p>
+                    <p className="text-sm text-gray-600">App Users</p>
                     <p className="text-3xl font-bold text-gray-900">{summaryStats.totalUsers}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {summaryStats.activeUsers} active · {summaryStats.inactiveUsers} inactive
+                    </p>
                   </div>
                   <Users className="h-12 w-12 text-gray-600 opacity-50" />
                 </div>
@@ -667,7 +732,19 @@ const ReportsPage: React.FC = () => {
               <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Library Items</p>
+                    <p className="text-sm text-gray-600">Lawyers</p>
+                    <p className="text-3xl font-bold text-gray-900">{summaryStats.totalLawyers}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {summaryStats.activeLawyers} active · {summaryStats.inactiveLawyers} inactive
+                    </p>
+                  </div>
+                  <Users className="h-12 w-12 text-teal-600 opacity-50" />
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Library / Bookshop</p>
                     <p className="text-3xl font-bold text-gray-900">{summaryStats.totalLibraryItems}</p>
                   </div>
                   <BookOpen className="h-12 w-12 text-gray-600 opacity-50" />
@@ -788,7 +865,7 @@ const ReportsPage: React.FC = () => {
                 </div>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow duration-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">User Status Distribution</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">App Users vs Lawyers</h3>
                 <div className="h-64">
                   <Pie data={getUsersStatusChartData()} options={{ maintainAspectRatio: false }} />
                 </div>
@@ -817,8 +894,9 @@ const ReportsPage: React.FC = () => {
                 {selectedReportType === 'platform' && 'All Chambers'}
                 {selectedReportType === 'chamber' && 'Chamber Details'}
                 {selectedReportType === 'practice' && 'Practice Report'}
-                {selectedReportType === 'users' && 'Users/Staff Report'}
-                {selectedReportType === 'library' && 'Library Report'}
+                {selectedReportType === 'users' && 'App Users Report'}
+                {selectedReportType === 'lawyers' && 'Lawyers Report'}
+                {selectedReportType === 'library' && 'Library / Bookshop Report'}
               </h3>
               <p className="text-sm text-gray-600 mt-1">
                 {filteredData.length} {filteredData.length === 1 ? 'item' : 'items'} found
@@ -877,13 +955,15 @@ const ReportsPage: React.FC = () => {
                   </Table.Body>
                 </Table>
               )}
-              {selectedReportType === 'users' && (
+              {(selectedReportType === 'users' || selectedReportType === 'lawyers') && (
                 <Table>
                   <Table.Header>
                     <Table.Row>
                       <Table.Head>Name</Table.Head>
                       <Table.Head>Email</Table.Head>
+                      <Table.Head>Account Type</Table.Head>
                       <Table.Head>Title</Table.Head>
+                      <Table.Head>Designation</Table.Head>
                       <Table.Head>Chamber</Table.Head>
                       <Table.Head>Practice</Table.Head>
                       <Table.Head>Region</Table.Head>
@@ -896,13 +976,26 @@ const ReportsPage: React.FC = () => {
                       const chamber = allChambers.find((c) => c.id === user['Chamber ID']);
                       const practice = allPractices.find((p) => p.id === user['Practice ID']);
                       const createdAt = user.CreatedAt?.toDate().toLocaleDateString() || 'N/A';
+                      const lawyer = isLawyerUser(user);
                       return (
                         <Table.Row key={user.id}>
                           <Table.Cell className="font-medium">
                             {user.Fname} {user.Lname}
                           </Table.Cell>
                           <Table.Cell>{user.Email || 'N/A'}</Table.Cell>
+                          <Table.Cell>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                lawyer
+                                  ? 'bg-teal-100 text-teal-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {lawyer ? 'Lawyer' : 'App User'}
+                            </span>
+                          </Table.Cell>
                           <Table.Cell>{user.Title || 'N/A'}</Table.Cell>
+                          <Table.Cell>{user.Designation || 'N/A'}</Table.Cell>
                           <Table.Cell>{chamber?.['Chamber Name'] || user['Chamber ID'] || 'N/A'}</Table.Cell>
                           <Table.Cell>{practice?.['Practice Name'] || user['Practice ID'] || 'N/A'}</Table.Cell>
                           <Table.Cell>{user.Region || 'N/A'}</Table.Cell>

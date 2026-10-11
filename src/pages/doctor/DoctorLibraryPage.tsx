@@ -21,6 +21,7 @@ import { app, auth, db, storage } from '../../firebase';
 import toast from 'react-hot-toast';
 import { Lock, Unlock } from 'lucide-react';
 import { formatProgressLabel, getBookProgress } from '../../lib/bookProgress';
+import { LIBRARY_CATEGORIES, LIBRARY_PLATFORM_FEE_RATE } from '../../constants/libraryCatalog';
 
 declare global {
   interface Window {
@@ -53,7 +54,13 @@ const DoctorLibraryPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
   const [payingBookId, setPayingBookId] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: '', author: '', category: '', description: '', price: '0' });
+  const [form, setForm] = useState({
+    title: '',
+    author: '',
+    category: 'Other',
+    description: '',
+    price: '0',
+  });
   const [file, setFile] = useState<File | null>(null);
   const [purchasedBookIds, setPurchasedBookIds] = useState<Set<string>>(new Set());
   const [paystackPublicKey, setPaystackPublicKey] = useState('');
@@ -167,18 +174,27 @@ const DoctorLibraryPage: React.FC = () => {
 
   const recordPurchase = async (b: LibraryDoc, reference: string) => {
     if (!currentDoctor?.uid) return;
+    const amount = Number(b.price || 0);
+    const platformFee = Number((amount * LIBRARY_PLATFORM_FEE_RATE).toFixed(2));
+    const sellerAmount = Number((amount - platformFee).toFixed(2));
+    const sellerId = (b.uploadedBy || b.sellerId || '').toString();
     await addDoc(collection(db, 'libraryPurchases'), {
       bookId: b.id,
       bookTitle: b.title || '',
-      amount: Number(b.price || 0),
+      amount,
+      platformFee,
+      platformFeeRate: LIBRARY_PLATFORM_FEE_RATE,
+      sellerAmount,
+      currency: 'GHS',
       buyerId: currentDoctor.uid,
-      buyerEmail: `${currentDoctor.uid}@lawhubb.local`,
-      sellerId: b.uploadedBy || '',
+      buyerEmail: auth.currentUser?.email || `${currentDoctor.uid}@lawhubb.local`,
+      sellerId,
       paystackReference: reference,
       provider: 'paystack',
       status: 'success',
       isPaid: true,
       paymentStatus: 'paid',
+      payoutStatus: sellerId ? 'pending' : 'unassigned',
       createdAt: serverTimestamp(),
       payoutNumber: '+233558466487',
     });
@@ -330,7 +346,7 @@ const DoctorLibraryPage: React.FC = () => {
         sellerId: currentDoctor.uid,
       });
       toast.success('Book uploaded.');
-      setForm({ title: '', author: '', category: '', description: '', price: '0' });
+      setForm({ title: '', author: '', category: 'Other', description: '', price: '0' });
       setFile(null);
     } catch (err) {
       console.error(err);
@@ -344,8 +360,11 @@ const DoctorLibraryPage: React.FC = () => {
     <DoctorLayout>
       <div className="mx-auto max-w-5xl space-y-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Library</h1>
-          <p className="text-slate-600">Browse shared books, open what you need, and add new titles for others to read.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Bookshop</h1>
+          <p className="text-slate-600">
+            Browse, purchase, and upload legal books. Sales use Paystack; sellers are credited after platform fee (
+            {Math.round(LIBRARY_PLATFORM_FEE_RATE * 100)}%).
+          </p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -363,11 +382,23 @@ const DoctorLibraryPage: React.FC = () => {
               value={form.author}
               onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
             />
-            <Input
-              placeholder="Law category (e.g., Criminal Law, Civil Law, Corporate Law)"
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-            />
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                Category
+              </label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-slate-900"
+                required
+              >
+                {LIBRARY_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
 
               <Input
