@@ -22,6 +22,8 @@ export interface Chamber {
   averageRating: number;
   ratingCount: number;
   "Chamber Practice": object | [];
+  /** ISO 3166-1 alpha-2 country code */
+  Country?: string;
   name: string;
   address: string;
   phone: string;
